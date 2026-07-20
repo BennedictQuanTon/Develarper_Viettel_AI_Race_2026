@@ -1,84 +1,57 @@
-# 🚀 Viettel AI Race 2026 — Challenge 3: LLM Inference Optimization
+# Viettel AI Race 2026 — Challenge 3: LLM Inference Optimization
 
 [![Competition](https://img.shields.io/badge/Viettel_AI_Race-2026-red.svg)](https://viettel.vn)
 [![Target Hardware](https://img.shields.io/badge/GPU-NVIDIA_H200-green.svg)](https://www.nvidia.com)
 [![Engine](https://img.shields.io/badge/Serving-vLLM-blue.svg)](https://github.com/vllm-project/vllm)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-An optimized, high-throughput, low-latency LLM serving solution developed for **Viettel AI Race 2026 (Challenge 3: LLM Inference Optimization)**. This repository houses our team's end-to-end inference stack designed to maximize serving efficiency under realistic, multi-turn production workloads on **NVIDIA H200 GPU** hardware.
+Team **Develarper** · Target hardware **NVIDIA H200** · Serving **vLLM** · Phase 1 deadline **30/07/2026**
 
----
+## Objective
 
-## 📌 Problem Overview
+Maximize **Effective Request Score (ERS)** on the official multi-turn workload trace while keeping accuracy degradation **Δ ≤ 0.10** on **GPQA Diamond** vs BF16 baseline so **f(Δ) = 1**.
 
-The objective of Challenge 3 is to optimize real-world enterprise LLM serving under strict operational constraints. Systems are evaluated on two primary criteria:
-
-1. **Effective Request Score (ERS)**: Evaluates serving responsiveness across a realistic multi-turn workload trace based on:
-   - **TTFT (Time-To-First-Token)**: Latency to initial token generation.
-   - **TPOT (Time-Per-Output-Token)**: Inter-token latency during streaming output.
-2. **Accuracy Gate ($f(\Delta)$)**: Post-competition quality evaluation using the **GPQA Diamond** benchmark against the FP16/BF16 baseline model to ensure quality is preserved ($\Delta \le 0.1$).
-
----
-
-## 🛠 Target Environment
-
-- **Hardware**: NVIDIA H200 GPU (141GB HBM3e, 4.8 TB/s memory bandwidth)
-- **OS**: Ubuntu 24.04 LTS
-- **Driver / CUDA**: NVIDIA Driver 590.x / CUDA 13.x
-- **Interface**: OpenAI-Compatible REST API
-
----
-
-## 💡 High-Level Optimization Strategy
-
-To achieve an optimal balance between throughput, latency, and accuracy, our architecture focuses on four main optimization pillars:
-
-```
-+-------------------------------------------------------------------+
-|                        Inference Stack                            |
-+-------------------------------------------------------------------+
-|  1. Quantization & Precision  | W8A8 FP8 execution & static scale |
-|  2. KV Cache & Memory         | PagedAttention & Prefix Caching  |
-|  3. Serving & Scheduling      | Continuous Batching & Chunked     |
-|  4. Accelerated Generation    | Speculative Decoding Integration  |
-+-------------------------------------------------------------------+
+```text
+Score = 100 × ERS × f(Δ)
 ```
 
-1. **Precision & Quantization Efficiency**
-   - Leveraging hardware-native 8-bit floating point (**FP8**) support on Hopper Tensor Cores for memory-bandwidth bound decode acceleration while preserving accuracy.
+## Strategy (Phase 1)
 
-2. **Advanced Memory & KV Cache Management**
-   - Paged KV Cache allocation to eliminate internal fragmentation and maximize batch capacity.
-   - Intelligent prefix caching to drastically reduce prefill overhead for multi-turn conversational traces.
+Resource-constrained playbook (local 16–32GB ×3, ~100 Firework credits, ~50 AMD credits; **model not announced yet**):
 
-3. **Latency-Aware Request Scheduling**
-   - Iteration-level continuous batching combined with chunked prefill to prevent Head-of-Line blocking and stabilize streaming TPOT.
+1. **vLLM** OpenAI-compatible server (streaming)
+2. **FP8 W8A8** offline weights (`llm-compressor`, keep `lm_head` in BF16)
+3. **Prefix caching** + **chunked prefill** (P0)
+4. Tune latency via **local ERS simulator + online BTC scores** — not AMD latency
+5. AMD **MI300X** only for quant/smoke; Firework only for coarse accuracy baseline
+6. KV-FP8 / speculative decoding = **optional P1** after a stable P0
 
-4. **Speculative Execution & Serving Stack**
-   - Production-ready serving infrastructure built on **vLLM**, integrated with draft-based speculative decoding mechanisms for higher generation throughput.
+Details: **[CONTEXT.md](CONTEXT.md)** (technical strategy) · **[PLAN.md](PLAN.md)** (day-by-day execution).
 
----
+## Problem statements
 
-## 📦 Containerization & Deployment
+- [PROBLEM.md](PROBLEM.md) (EN)
+- [PROBLEM_VN.md](PROBLEM_VN.md) (VN)
 
-The solution is packaged as a fully self-contained Docker image conforming to strict offline serving rules:
+## Target environment
+
+- GPU: NVIDIA H200 (141GB HBM3e)
+- OS: Ubuntu 24.04 LTS
+- Driver / CUDA: 590.x / 13.x
+- API: `POST /v1/chat/completions`
+
+## P0 serve sketch
 
 ```bash
-# Pull and run the serving container
-docker run --gpus all \
-  -p 8000:8000 \
-  --ipc=host \
-  develarper-viettel-ai-race-2026:latest
+vllm serve /model_weights/LLM-FP8 \
+  --host 0.0.0.0 --port 8000 \
+  --gpu-memory-utilization 0.90 \
+  --enable-prefix-caching \
+  --enable-chunked-prefill \
+  --max-num-batched-tokens 4096
 ```
 
-The container exposes an OpenAI-compatible API endpoint:
-- `POST /v1/chat/completions`
-
----
-
-## 🧪 Evaluation & Quality Verification
-
-Local verification against the accuracy gate is performed using `lm-evaluation-harness`:
+## Accuracy smoke (when endpoint is up)
 
 ```bash
 lm_eval --model local-chat-completions \
@@ -87,8 +60,6 @@ lm_eval --model local-chat-completions \
   --num_fewshot 0
 ```
 
----
+## Team
 
-## 👥 Team & Acknowledgments
-
-Developed by **Develarper Team** for **Viettel AI Race 2026**.
+2× AI Engineers (model/quant + serving/ERS) · 1× DevOps (compose, eval, submit hygiene)
