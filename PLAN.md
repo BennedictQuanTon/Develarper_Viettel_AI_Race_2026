@@ -5,16 +5,6 @@
 > **Deadline Phase 1:** 30/07/2026 · **Hôm nay giả định:** 20/07/2026 (~10 ngày).  
 > **Constraints:** BTC chưa công bố model / chưa cấp cluster; local 16–32GB ×3; ~100 Firework; ~50 AMD; team = 2 AI + 1 DevOps.
 
-### 10 ngày — học thuộc
-
-1. **Ngày 1–3:** Dựng quán (Docker + smoke + ERS sim) trên laptop — **chưa thuê AMD**  
-2. **Ngày 4–6:** Có model → nén FP8 (MI300X) → nộp **P0 an toàn** lấy ERS trên H200  
-3. **Ngày 7:** Mỗi lần nộp chỉ đổi **1 nút**, ghi [eval/ablation_sheet.md](eval/ablation_sheet.md)  
-4. **Ngày 8:** Thử P1 (KV-FP8 / spec) chỉ nếu ngày 7 ổn  
-5. **Ngày 9–10:** Anti-cheat + freeze + nộp cuối  
-
-**Scaffold status:** repo đã có `Dockerfile`, `docker-compose.yml`, `scripts/*`, `configs/*`, `eval/*`. DoD local: mock server + `smoke_openai.py`.
-
 ---
 
 ## 0. North Star
