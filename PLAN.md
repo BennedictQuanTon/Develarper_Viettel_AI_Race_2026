@@ -5,6 +5,16 @@
 > **Deadline Phase 1:** 30/07/2026 · **Hôm nay giả định:** 20/07/2026 (~10 ngày).  
 > **Constraints:** BTC chưa công bố model / chưa cấp cluster; local 16–32GB ×3; ~100 Firework; ~50 AMD; team = 2 AI + 1 DevOps.
 
+### 10 ngày — học thuộc
+
+1. **Ngày 1–3:** Dựng quán (Docker + smoke + ERS sim) trên laptop — **chưa thuê AMD**  
+2. **Ngày 4–6:** Có model → nén FP8 (MI300X) → nộp **P0 an toàn** lấy ERS trên H200  
+3. **Ngày 7:** Mỗi lần nộp chỉ đổi **1 nút**, ghi [eval/ablation_sheet.md](eval/ablation_sheet.md)  
+4. **Ngày 8:** Thử P1 (KV-FP8 / spec) chỉ nếu ngày 7 ổn  
+5. **Ngày 9–10:** Anti-cheat + freeze + nộp cuối  
+
+**Scaffold status:** repo đã có `Dockerfile`, `docker-compose.yml`, `scripts/*`, `configs/*`, `eval/*`. DoD local: mock server + `smoke_openai.py`.
+
 ---
 
 ## 0. North Star
@@ -63,33 +73,24 @@
 
 ---
 
-## 3. Repo Skeleton cần dựng (hiện repo gần như chỉ docs)
-
-Tạo cấu trúc tối thiểu (DO lead, AI hỗ trợ):
+## 3. Repo Skeleton (đã dựng)
 
 ```text
 .
-├── CONTEXT.md          # strategy (đã có)
-├── PLAN.md             # playbook (file này)
-├── PROBLEM.md / PROBLEM_VN.md
-├── README.md
-├── docker-compose.yml  # Phase 1 submit
-├── Dockerfile
+├── Dockerfile / docker-compose.yml   # profiles: mock | gpu
 ├── scripts/
-│   ├── serve.sh
+│   ├── mock_openai_server.py         # CPU stub
 │   ├── smoke_openai.py
 │   ├── ers_sim.py
-│   ├── quant_fp8.py
+│   ├── quant_fp8.py                  # --dry-run local; real on AMD
+│   ├── serve.sh
 │   └── lm_eval_smoke.sh
-├── configs/
-│   ├── p0_safe.env
-│   └── p1_aggressive.env
-├── eval/
-│   └── ablation_sheet.md
-└── model_weights/      # gitignore; pack vào image lúc build
+├── configs/   p0_safe.env  p1_aggressive.env  ers_params.example.json
+├── eval/      ablation_sheet.md  portal_notes.md  credit_sheet.md  traces/
+└── model_weights/                    # gitignore weights
 ```
 
-**DoD skeleton:** `docker compose up` với proxy model 7B/8B (hoặc mock) trả streaming chat completions.
+**DoD local:** `python scripts/mock_openai_server.py` + `python scripts/smoke_openai.py` → OK.
 
 ---
 

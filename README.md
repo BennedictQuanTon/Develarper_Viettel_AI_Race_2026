@@ -1,10 +1,5 @@
 # Viettel AI Race 2026 — Challenge 3: LLM Inference Optimization
 
-[![Competition](https://img.shields.io/badge/Viettel_AI_Race-2026-red.svg)](https://viettel.vn)
-[![Target Hardware](https://img.shields.io/badge/GPU-NVIDIA_H200-green.svg)](https://www.nvidia.com)
-[![Engine](https://img.shields.io/badge/Serving-vLLM-blue.svg)](https://github.com/vllm-project/vllm)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
-
 Team **Develarper** · Target hardware **NVIDIA H200** · Serving **vLLM** · Phase 1 deadline **30/07/2026**
 
 ## Objective
@@ -26,38 +21,43 @@ Resource-constrained playbook (local 16–32GB ×3, ~100 Firework credits, ~50 A
 5. AMD **MI300X** only for quant/smoke; Firework only for coarse accuracy baseline
 6. KV-FP8 / speculative decoding = **optional P1** after a stable P0
 
-Details: **[CONTEXT.md](CONTEXT.md)** (technical strategy) · **[PLAN.md](PLAN.md)** (day-by-day execution).
+Details: **[CONTEXT.md](CONTEXT.md)** · **[PLAN.md](PLAN.md)** · Problems: [EN](PROBLEM.md) / [VN](PROBLEM_VN.md)
 
-## Problem statements
+## Scaffold (do this now — no BTC model required)
 
-- [PROBLEM.md](PROBLEM.md) (EN)
-- [PROBLEM_VN.md](PROBLEM_VN.md) (VN)
+```bash
+# 1) Mock OpenAI server (CPU)
+python scripts/mock_openai_server.py --port 8000
+
+# 2) Smoke streaming client (other terminal)
+python scripts/smoke_openai.py --base-url http://127.0.0.1:8000/v1
+
+# 3) ERS ranking signal (synthetic until public trace exists)
+python scripts/ers_sim.py --synthetic --params configs/ers_params.example.json
+
+# 4) Quant script dry-run (do NOT rent AMD until model id exists)
+python scripts/quant_fp8.py --model Qwen/Qwen2.5-0.5B-Instruct --out /tmp/fp8-dry --dry-run
+
+# Optional: mock via Compose
+docker compose --profile mock up
+```
+
+GPU serve (needs NVIDIA + weights under `model_weights/`):
+
+```bash
+docker compose --profile gpu up --build
+```
 
 ## Target environment
 
 - GPU: NVIDIA H200 (141GB HBM3e)
-- OS: Ubuntu 24.04 LTS
-- Driver / CUDA: 590.x / 13.x
+- OS: Ubuntu 24.04 LTS · Driver / CUDA: 590.x / 13.x
 - API: `POST /v1/chat/completions`
 
 ## P0 serve sketch
 
 ```bash
-vllm serve /model_weights/LLM-FP8 \
-  --host 0.0.0.0 --port 8000 \
-  --gpu-memory-utilization 0.90 \
-  --enable-prefix-caching \
-  --enable-chunked-prefill \
-  --max-num-batched-tokens 4096
-```
-
-## Accuracy smoke (when endpoint is up)
-
-```bash
-lm_eval --model local-chat-completions \
-  --tasks gpqa_diamond \
-  --model_args "model=/path/to/model,base_url=http://localhost:8000/v1/chat/completions,add_bos_token=True" \
-  --num_fewshot 0
+CONFIG_FILE=configs/p0_safe.env ./scripts/serve.sh
 ```
 
 ## Team

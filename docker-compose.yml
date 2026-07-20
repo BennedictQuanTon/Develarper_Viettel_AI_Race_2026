@@ -1,0 +1,32 @@
+# Phase 1 scaffold.
+# - `mock`: CPU-only OpenAI-compatible stub (local DoD / CI smoke)
+# - `vllm`: real GPU serve for H200 / local NVIDIA (needs weights)
+
+services:
+  mock:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./scripts:/app/scripts:ro
+    command: ["python", "scripts/mock_openai_server.py", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    profiles: ["mock"]
+
+  vllm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    gpus: all
+    ipc: host
+    environment:
+      CONFIG_FILE: /app/configs/p0_safe.env
+      MODEL_PATH: /model_weights/LLM-FP8
+    volumes:
+      # Mount weights until they are baked into the image for final submit
+      - ./model_weights:/model_weights:ro
+      - ./configs:/app/configs:ro
+      - ./scripts/serve.sh:/app/scripts/serve.sh:ro
+    ports:
+      - "8000:8000"
+    profiles: ["gpu"]
