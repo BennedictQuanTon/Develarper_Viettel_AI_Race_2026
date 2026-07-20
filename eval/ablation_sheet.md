@@ -1,11 +1,11 @@
-# Ablation sheet — change ONE flag per online submission
+# Ablation — LFM2.5-1.2B on MiG H200 18GB (change ONE flag per submit)
 
-| ID | Date | Digest | Flags changed | ERS | Errors / notes | Keep? |
+| ID | Date | Hub digest/tag | Flags changed | ERS | Errors / notes | Keep? |
 |---|---|---|---|---|---|---|
-| P0 | | | prefix+chunked, bt=4096, mem=0.90 | | baseline | |
-| A1 | | | max-num-batched-tokens=2048 | | | |
-| A2 | | | max-num-batched-tokens=8192 | | | |
-| A3 | | | gpu-memory-utilization=0.88 | | | |
-| A4 | | | gpu-memory-utilization=0.92 | | | |
-| B1 | | | kv-cache-dtype=fp8 | | | |
-| B2 | | | speculative K=2 | | only if draft exists | |
+| P0 | | | prefix ON, mem=0.95, max-model-len=32768 (BTC-like) | | baseline | |
+| A1 | | | gpu-memory-utilization=0.90 | | | |
+| A2 | | | max-num-batched-tokens=2048 | | | |
+| A3 | | | max-num-batched-tokens=8192 | | | |
+| A4 | | | enable-chunked-prefill | | | |
+| B1 | | | quantization=fp8 (online) | | check Δ | |
+| B2 | | | kv-cache-dtype=fp8 | | | |

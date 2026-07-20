@@ -1,348 +1,196 @@
-# CONTEXT — Technical Strategy Report  
-## Viettel AI Race 2026 · Challenge 3: LLM Inference Optimization  
-**Team:** Develarper · **Phase 1 target:** 30/07/2026 · **Hardware chấm:** NVIDIA H200
+# CONTEXT — Technical Strategy Report (Updated)
+## Viettel AI Race 2026 · Challenge 3  
+**Team Develarper · Model: LiquidAI/LFM2.5-1.2B-Instruct · Slice: MiG H200 18GB**
 
-> Tài liệu này là **báo cáo kỹ thuật + chỉ đạo chiến lược**: tụi mình tính làm gì, dùng gì, vì sao, đạt được gì — trong điều kiện tài nguyên thật (local 16–32GB RAM × 3 máy, ~100 credit Firework AI, ~50 credit AMD Cloud). BTC **chưa công bố model** và **chưa cấp cluster dev**; hiện chỉ có đề bài + repo này.
-
----
-
-## 1. Executive Brief
-
-| | |
-|---|---|
-| **Mục tiêu Phase 1** | Nộp Docker Compose serving OpenAI-compatible trên H200; maximize **ERS**; giữ **Δ ≤ 0.10** để \(f(\Delta)=1\). |
-| **Chiến lược 1 câu** | *Stable vLLM + FP8 W8A8 + Prefix Cache + Chunked Prefill; tune latency bằng ERS simulator local + điểm online BTC; AMD chỉ để nén model & smoke functional; Firework chỉ để baseline chất lượng.* |
-| **Không làm Phase 1** | TensorRT-LLM từ đầu, custom CUDA lớn, disagg P/D, semantic cache rủi ro anti-cheat, đo TTFT/TPOT trên AMD để chọn winner. |
-| **Definition of Done** | Compose chạy offline; `/v1/chat/completions` streaming ổn; error/timeout ≈ 0 trên trace giả lập; có ít nhất 1 submission P0 trên leaderboard; checklist anti-cheat pass. |
-
-**Vì sao hướng này thắng được với resource nghèo:** đề cho tự do tối ưu, nhưng vòng online chỉ chấm ERS; accuracy hậu kiểm. Đội nhỏ không có H200 để sweep — phải biến **online submission** thành lab latency, còn local/AMD/Firework làm đúng việc rẻ của chúng.
+> Cập nhật theo đề mới: model cố định 1.2B, **chỉ vLLM**, MiG **18GB**, ERS params đã công bố, nộp Docker Hub + compose.  
+> Đề chi tiết: [PROBLEM_VN.md](PROBLEM_VN.md) · Việc làm ngày-ngày: [PLAN.md](PLAN.md)
 
 ---
 
-## 2. Bài toán → Mental Model Chấm điểm
+## 1. Executive Brief (hiểu trong 60 giây)
 
-### 2.1 Hai trục
+Cuộc thi **không** phải train model. BTC bắt phục vụ đúng model **LFM2.5-1.2B-Instruct** bằng **vLLM**, trên **1 MiG H200 chỉ 18GB VRAM**.
+
+Online chỉ chấm **nhanh/ổn** (ERS). Sau vòng mới kiểm **còn đúng không** (GPQA, baseline ~0.4).
+
+```text
+Score = 100 × ERS × f(Δ)
+```
+
+| Trục | Ý nghĩa đời thường | Số quan trọng |
+|---|---|---|
+| **TTFT** | Thời gian chờ chữ đầu | Floor 10ms · Ceiling 400ms · γ=2 · w=0.5 |
+| **TPOT** | Thời gian giữa các chữ | Floor 1ms · Ceiling **10ms** · γ=2 |
+| **Δ** | Độ sụt GPQA vs BF16 | ≤0.10 giữ điểm; ≥0.16 → Score=0 |
+| **VRAM** | “Bếp” chỉ 18GB | Model nhỏ ~vài GB → phần lớn VRAM cho **KV / concurrency** |
+
+**Định hướng 1 câu:** *Bake weights vào image vLLM (baseline ≥ v0.22.1, kiểm tra support LFM2), bật prefix caching mạnh vì shared system prefix, tối ưu decode/TPOT dưới 10ms ceiling, giữ accuracy; quant online/FP8 là đòn bẩy phụ trên model 1.2B.*
+
+---
+
+## 2. Đề mới đổi gì so với giả định cũ?
+
+| Trước (đoán) | Nay (đề thật) | Hệ quả cho đội |
+|---|---|---|
+| Model lớn chưa biết, cần AMD MI300X nén | **LFM2.5-1.2B** (~edge-size) | Quant có thể làm **local / GPU nhỏ**; AMD không còn P0 |
+| Full H200 141GB | **MiG 18GB** | Không “vung VRAM”; tối ưu **batch đồng thời + prefix** |
+| Engine tự chọn | **Chỉ vLLM** | Bỏ SGLang/TRT-LLM |
+| ERS params ẩn | **F/C/γ/w công bố** | Có thể tune theo hàm điểm thật |
+| Compose tự do | Entrypoint **bắt buộc form** `python3 -m vllm.entrypoints.openai.api_server` | Sửa scaffold compose cho khớp mẫu BTC |
+| Offline quant là trụ | Đề nhấn **Online Quantization** | Ưu tiên flag quant runtime trước; offline vẫn OK nếu ổn định hơn |
+
+---
+
+## 3. Mental model chấm điểm (với số thật)
 
 ```mermaid
 flowchart LR
-  Trace[Workload_Trace_MultiTurn] --> Serve[OpenAI_Endpoint]
-  Serve --> ERS[ERS_Online]
-  Serve --> Audit[Post_Audit]
-  Audit --> GPQA[GPQA_Diamond]
-  GPQA --> Delta["f(Delta)"]
-  ERS --> Score["Score = 100 x ERS x f(Delta)"]
-  Delta --> Score
+  Trace[MultiTurn_Trace] --> Endpoint[vLLM_on_MiG_18GB]
+  Endpoint --> ERS[ERS_online]
+  Endpoint --> Gate[GPQA_post]
+  ERS --> Score[Score]
+  Gate --> Score
 ```
 
-- **ERS** (online mỗi lần nộp): trung bình \(S_{\text{request}}\) trên \(N\) request. Lỗi / timeout / 0 token → **\(S=0\)**.
-- **Accuracy Gate** (sau vòng online, chọn ≤5 submission): \(\Delta = Acc_{BF16} - Acc_{sub}\); \(\Delta \le 0.10\) giữ hệ số 1.0; \(\Delta \ge 0.16\) → điểm 0.
+### 3.1 Vì sao TPOT 10ms ceiling là “khó”
 
-### 2.2 Hệ quả thiết kế (quan trọng hơn “chạy nhanh”)
+γ=2 → điểm rơi **nhanh** khi ra khỏi vùng tốt. TPOT ceiling chỉ **10ms/token** → decode phải rất nhanh và ổn định dưới tải đồng thời (`num_conversations` lớn). Một spike HoL (prefill dài chặn decode) phá hàng loạt `s_tpot`.
 
-1. **Reliability là P0 tuyệt đối** — một spike OOM làm chết cả cụm request liên tiếp trên multi-turn.
-2. **TTFT vs TPOT phải cân** theo \(w, F, C, \gamma\) (BTC sẽ công bố / có trong trace update). Chưa có số → giữ config trung dung + sweep khi có.
-3. **Không dual-path** — cùng một behavior cho đo latency và GPQA.
-4. **Multi-turn + think time** → prefix trùng lịch sử hội thoại là đòn bẩy “miễn phí” hợp lệ.
+### 3.2 Vì sao prefix caching là P0 tuyệt đối
 
-### 2.3 Công thức nhắc nhanh
+Trace có **`shared_system_prefix_tokens`** giống mọi hội thoại + multi-turn history. Mỗi lần recompute prefix = phí TTFT vô ích. `--enable-prefix-caching` trong mẫu BTC là điểm xuất phát đúng — đội phải **giữ và khai thác triệt để**, không tắt trừ khi A/B chứng minh hại.
 
-\[
-S_{\text{request}} = w\cdot s_{\text{ttft}} + (1-w)\cdot s_{\text{tpot}}
-\]
+### 3.3 Reliability
 
-\[
-s = \left[\mathrm{clamp}\left(\frac{C - L}{C - F}, 0, 1\right)\right]^{\gamma}
-\]
-
-**Đạt được gì khi hiểu đúng:** mọi flag vLLM phải trả lời được câu *“cải thiện \(s_{\text{ttft}}\), \(s_{\text{tpot}}\), hay giảm error rate?”* — không tối ưu tokens/s thuần.
+Lỗi / timeout / 0 token → **S = 0**. Trên 18GB, OOM khi tăng concurrency vẫn là rủi ro nếu `max-model-len` / mem-util / KV quá tham.
 
 ---
 
-## 3. Ràng buộc Tài nguyên Thật & Nguyên tắc Vận hành
+## 4. Model & Stack mục tiêu
 
-### 3.1 Inventory
+### 4.1 Model
 
-| Nguồn | Có gì | Dùng để | Không dùng để |
-|---|---|---|---|
-| **Local ×3** (16–32GB RAM) | CPU/RAM, có thể GPU consumer nhỏ | Code, Compose, proxy 7B/8B, ERS simulator, unit/smoke API | Load full BF16 model lớn, đo ERS “thật” |
-| **Firework ~100 credit** | API inference | Baseline / proxy accuracy thô, vài smoke chất lượng | Ablation lặp, decode latency lab |
-| **AMD Cloud ~50 credit** | GPU lớn (đề xuất MI300X) | **1–2 lần** quant FP8 + pack weights; serve functional; 1 smoke lm_eval | Sweep TTFT/TPOT (số liệu không transfer sang H200) |
-| **BTC H200** (lúc chấm/nộp) | GPU đích | **Lab latency duy nhất đáng tin** qua điểm ERS online | — |
-| **BTC assets** | Chưa có model / cluster / (có thể) trace | Portal theo dõi hàng ngày — **unblock #1** | Không ngồi chờ mãi mà không scaffold |
+- **ID:** `LiquidAI/LFM2.5-1.2B-Instruct`
+- **Kiến trúc:** LFM2 hybrid (gated short-convolution xen GQA) — KV nhỏ hơn full-attention cùng size, decode thiên về nhanh/edge
+- **Context:** tới 32K (đề mẫu `--max-model-len=32768`)
+- **vLLM:** native `Lfm2ForCausalLM` (công thức serve theo docs Liquid/vLLM recipes)
 
-### 3.2 Gợi ý thuê AMD (hợp lý với ~50 credit)
+**Rủi ro version:** baseline BTC là `vllm/vllm-openai:v0.22.1`. Một số recipe LFM2.5 ghi min version mới hơn. **Việc P0:** verify model load trên `v0.22.1`; nếu fail → image vLLM mới hơn (public Docker Hub) miễn vẫn là vLLM + đúng entrypoint form.
 
-| Lựa chọn | Khi nào | Lý do |
-|---|---|---|
-| **Ưu tiên: MI300X (192GB)** | Quant + load model ≥30B / cần headroom KV | Đủ VRAM để `llm-compressor` oneshot + serve functional không shard phức tạp; khớp “artifact factory” |
-| **MI250 / card nhỏ hơn** | Chỉ prototype proxy / hết credit MI300X | Rẻ hơn nhưng dễ OOM khi quant model lớn |
-| **Không ưu tiên multi-node** | Phase 1 | Tốn credit + phức tạp compose; đề là tối ưu serving trên slice H200 |
-
-**Cách đốt credit:** tối đa **2 session dài có checklist** (Session A: quant+export; Session B: vLLM load FP8 + smoke). Mọi thử flag latency để dành cho submission BTC.
-
-### 3.3 Quy tắc vàng resource-poor
-
-```mermaid
-flowchart TB
-  subgraph cheap [Cheap_Loop_Local]
-    Code[Compose_Scripts_Proxy]
-    Sim[ERS_Simulator]
-  end
-  subgraph mid [Mid_Cost]
-    FW[Firework_Baseline]
-    AMD[AMD_Quant_and_Smoke]
-  end
-  subgraph truth [Truth_Loop]
-    BTC[Online_ERS_on_H200]
-  end
-  Code --> Sim
-  Sim -->|rank_hypotheses| BTC
-  AMD -->|weights_artifact| BTC
-  FW -->|Delta_sanity| AMD
-```
-
----
-
-## 4. Kiến trúc Hệ thống Mục tiêu (H200)
-
-### 4.1 Serving stack
+### 4.2 Kiến trúc serving
 
 ```mermaid
 flowchart LR
-  BTCClient[BTC_Scorer] -->|HTTP_stream| API[vLLM_OpenAI_API]
-  API --> Sched[Continuous_Batching]
-  Sched --> Chunk[Chunked_Prefill]
-  Chunk --> Attn[PagedAttention]
-  Attn --> PC[Prefix_Cache]
-  Attn --> W[FP8_W8A8_Weights]
-  Attn --> KV[KV_FP16_default]
-  Sched -.->|P1_optional| Spec[EAGLE_SpecDecode]
-  W --> H200[H200_Hopper]
-  KV --> H200
+  BTC[BTC_Benchmark] -->|OpenAI_API| API[vLLM_api_server]
+  API --> PC[Prefix_Cache]
+  API --> CB[Continuous_Batch]
+  API --> CP[Chunked_Prefill]
+  PC --> Eng[Lfm2_Engine]
+  CB --> Eng
+  CP --> Eng
+  Eng --> W[BF16_or_FP8_Weights]
+  Eng --> KV[KV_on_18GB]
 ```
 
-| Thành phần | Quyết định Phase 1 | Lý do kỹ thuật | Đạt được |
-|---|---|---|---|
-| **Engine** | **vLLM** | Out-of-box continuous batching, PagedAttention, prefix cache, FP8; cộng đồng lớn; thời gian đội nhỏ | Time-to-working-system ngắn, ít rủi ro biên dịch |
-| **Quant** | **FP8 W8A8 offline** (`llm-compressor`), giữ `lm_head` BF16 | Hopper native FP8; decode memory-bandwidth bound; Δ thường nhỏ hơn INT4 | Giảm weight traffic → TPOT tốt hơn; fit KV nhiều hơn |
-| **Prefix cache** | **ON** | Trace multi-turn tái sử dụng history | Giảm prefill → TTFT tốt hơn turn 2+ |
-| **Chunked prefill** | **ON** | Tránh HoL blocking khi prefill dài đóng băng decode | Làm mượt TPOT dưới tải lẫn |
-| **KV dtype** | **FP16 mặc định; FP8 = A/B** | FP8 KV tăng batch nhưng có rủi ro accuracy / kernel | Chỉ giữ nếu ERS↑ và smoke Δ ổn |
-| **Speculative** | **OFF mặc định** | Chưa có model → chưa chắc có draft EAGLE; dễ phá TTFT | Bật P1 chỉ khi BTC cho draft/path rõ |
-| **TensorRT-LLM / custom CUDA** | **Không Phase 1** | Learning curve + compile risk > lợi ích trong ~10 ngày | Giữ slot thời gian cho reliability |
-
-### 4.2 Config ứng viên (không phải “winner cứng”)
-
-**P0 — Safe Champion (nộp trước):**
-
-```bash
-vllm serve /model_weights/LLM-FP8 \
-  --host 0.0.0.0 --port 8000 \
-  --gpu-memory-utilization 0.90 \
-  --max-model-len <FROM_MODEL_OR_TRACE> \
-  --enable-prefix-caching \
-  --enable-chunked-prefill \
-  --max-num-batched-tokens 4096
-```
-
-**P1 — Aggressive (chỉ sau khi P0 có điểm ERS):**
-
-- Thêm `--kv-cache-dtype fp8`
-- Sweep `--max-num-batched-tokens` ∈ {2048, 4096, 8192}
-- Sweep `--gpu-memory-utilization` ∈ {0.88, 0.90, 0.92}
-- Speculative `num_speculative_tokens=2` **nếu** có draft chính thức
-
-**Vì sao không hardcode 2048 / 0.93 / EAGLE K=3 như bản research cũ:** các số đó phụ thuộc \(w,F,C\) và concurrency trace; áp dụng mù có thể hại TTFT hoặc OOM → \(S=0\).
+| Layer | P0 (nộp sớm) | P1 (sau khi có ERS) |
+|---|---|---|
+| Image | Bake `/model` weights, **no network** lúc chạy | Pin digest |
+| Prefix cache | **ON** | Giữ |
+| gpu-memory-utilization | 0.90–0.95 (baseline mẫu 0.95) | Sweep 0.88–0.95 nếu OOM/ERS |
+| max-model-len | Bắt đầu theo workload thật; 32K nếu trace cần | Giảm nếu lãng phí KV |
+| Chunked prefill | ON nếu version hỗ trợ ổn | A/B TTFT↔TPOT |
+| Online / FP8 quant | Thử sau P0 BF16 ổn | Giữ nếu TPOT↑ và Δ OK |
+| KV-FP8 | Không mặc định | A/B concurrency |
+| Speculative | Thấp ưu tiên (model đã nhỏ) | Chỉ nếu có draft hợp lệ + ERS↑ |
 
 ---
 
-## 5. Quyết định theo Model (khi BTC công bố)
+## 5. Chiến lược tối ưu theo đòn bẩy (ưu tiên)
 
-BTC chưa công bố model. Mọi đường dưới đây là **decision tree** — AI1 kích hoạt trong 24h sau khi có tên model.
+### P0 — “Chạy đúng + prefix”
+
+1. Image public Docker Hub, weights **trong image** tại `/model`
+2. Compose đúng form entrypoint BTC
+3. `--enable-prefix-caching`
+4. `--served-model-name=LFM2.5-1.2B-Instruct`
+5. Health + streaming ổn; nộp lấy ERS baseline
+
+**Đạt được:** điểm >0, biết floor thực tế trên MiG.
+
+### P1 — “Ép TPOT / concurrency trên 18GB”
+
+1. Sweep `max-num-batched-tokens`, `gpu-memory-utilization`
+2. Chunked prefill on/off
+3. Online FP8 / quant flag vLLM (đề cho phép)
+4. KV dtype FP8 nếu tăng batch mà không phá Δ / TTFT
+
+**Đạt được:** nhiều conversation đồng thời hơn, TPOT gần floor hơn dưới tải.
+
+### P2 — “Hệ thống”
+
+CUDA Graphs / FlashInfer / Triton — chỉ khi còn ngày và P1 đã bão hòa.
+
+### Cố ý không làm
+
+- Đổi engine (cấm)
+- Dual-path / gọi HF lúc serve (cấm mạng ngoài)
+- Tin latency AMD/local consumer = H200 MiG
+- Quant “nặng” làm Δ ≥ 0.10 không cần thiết (baseline 0.4; margin còn nhưng đừng tham)
+
+---
+
+## 6. Resource đội (cập nhật)
+
+| Nguồn | Vai trò mới |
+|---|---|
+| **Local 16–32GB** | Download 1.2B, build image, smoke API, ERS sim với **params thật** |
+| **Firework ~100** | Smoke GPQA thô / so Δ — ít lần |
+| **AMD ~50** | **Không còn bắt buộc** cho quant 1.2B; giữ buffer hoặc 1 session nếu local không có GPU NVIDIA |
+| **BTC MiG** | Lab ERS duy nhất đáng tin (mỗi lần submit) |
+
+---
+
+## 7. Nộp bài đúng luật
 
 ```mermaid
-flowchart TD
-  M[Model_Announced] --> A{Architecture}
-  A -->|Dense_Llama_Qwen_etc| D[vLLM_FP8_Prefix_Chunked]
-  A -->|MoE| MoE[vLLM_careful_quant_expert_aware]
-  A -->|MLA_DeepSeek_like| MLA[vLLM_first_SGLang_only_if_blocked]
-  D --> E{Official_EAGLE_draft?}
-  E -->|Yes| S[P1_try_spec_K2]
-  E -->|No| NS[No_spec_Phase1]
-  MoE --> NS
-  MLA --> E
+flowchart LR
+  Build[Build_Image_with_weights] --> Hub[Push_DockerHub_Public]
+  Hub --> Compose[Submit_compose_yml]
+  Compose --> Mig[BTC_pull_on_MiG_18GB]
+  Mig --> ERS[ERS_Leaderboard]
 ```
 
-| Tín hiệu model | Việc phải làm ngay | Rủi ro |
-|---|---|---|
-| Dense 70B-class | FP8 offline trên MI300X; `max-model-len` theo context đề | Image size / thời gian pack |
-| MoE | Không quant mù mọi expert; đọc doc vLLM MoE FP8 | OOM / sai expert routing |
-| MLA | Ưu tiên vLLM hỗ trợ sẵn; chỉ cân SGLang nếu thiếu kernel | Mất thời gian đổi engine |
-| Có chat template đặc thù | Khóa template trong serve; test streaming | Sai template → GPQA sập dù FP8 “đẹp” |
-
-**Đạt được gì:** không lock chết một stack sai architecture; vẫn ship P0 trong Phase 1.
+- Image **public**
+- Compose trỏ đúng tag/digest
+- Entrypoint: `python3 -m vllm.entrypoints.openai.api_server` (không đổi sang `vllm serve` nếu BTC yêu cầu form mẫu)
+- Không download weight lúc start
 
 ---
 
-## 6. Lượng tử hóa & Chất lượng
+## 8. Team RACI (giữ 2 AI + 1 DevOps)
 
-### 6.1 Vì sao FP8 W8A8 (không phải AWQ-4 trước)
-
-- Decode LLM trên H200 **memory-bandwidth bound** → giảm bitwidth weight tăng hiệu dụng băng thông.
-- Hopper có Tensor Core FP8 → ít overhead dequant hơn INT4 kiểu cũ.
-- Accuracy Gate cho \(\Delta \le 0.10\) trước khi phạt — FP8 thường nằm trong vùng an toàn **nếu** giữ `lm_head` và đúng chat template; INT4 dễ gần biên nguy hiểm hơn trên GPQA Diamond.
-- Offline compress → cold start submission nhanh, không quant động lúc boot (tránh timeout / hành vi bất định).
-
-### 6.2 Pipeline quant (chạy trên AMD MI300X)
-
-1. Tải BF16/BF16-equivalent baseline **đúng revision BTC**.
-2. `llm-compressor` recipe FP8, `ignore=["lm_head"]`.
-3. Export `compressed-tensors` mà vLLM load được.
-4. Smoke: 20–50 prompt + (nếu credit đủ) slice GPQA — so với số Firework/BTC baseline.
-5. Pack vào image; **cấm** download weight lúc container start.
-
-### 6.3 Accuracy workflow tiết kiệm credit
-
-| Bước | Tool | Credit |
-|---|---|---|
-| Baseline tham chiếu | Firework hoặc số BTC công bố | 20–40 Firework |
-| Sau quant smoke | AMD lm_eval ngắn / subset | 1 session AMD |
-| Final GPQA tin cậy | BTC hậu kiểm | 0 (nhưng chọn đúng 5 ảnh) |
-
-**Không tin** điểm Firework tuyệt đối trùng BTC — chỉ dùng hướng \(\Delta\) thô. Khi BTC publish \(Acc_{baseline}\), khóa theo số đó.
-
----
-
-## 7. Scheduling, KV, Prefill — Liên hệ trực tiếp ERS
-
-| Kỹ thuật | Cơ chế | Ảnh hưởng ERS | Cách dùng đội mình |
-|---|---|---|---|
-| Continuous batching | Iteration-level | Throughput + giảm chờ | Mặc định vLLM |
-| PagedAttention | Block KV | Tăng batch, giảm OOM | Mặc định |
-| Prefix caching | Hash block tái sử dụng | TTFT turn sau ↓ | **P0 ON** |
-| Chunked prefill | Xen kẽ prefill/decode | TPOT ổn hơn khi lẫn tải | **P0 ON** |
-| `max-num-batched-tokens` | Ngân sách token/step | Trade TTFT↔TPOT | **Sweep online** |
-| KV FP8 | Nén KV | Batch↑, rủi ro Δ | **P1 A/B** |
-
-**Giả lập local (không GPU lớn):** khi có public redacted trace (arrival + token in/out), viết simulator:
-
-- Replay concurrency / queueing giả định throughput model.
-- Tính \(S_{\text{request}}\) với \(F,C,w,\gamma\) khi có.
-- **Xếp hạng giả thuyết config** trước khi đốt 1 lượt nộp BTC.
-
-Mục tiêu simulator: không dự đoán số ERS tuyệt đối trên H200, mà **loại config chắc chắn tệ** (ví dụ batched-tokens quá thấp khi \(w\) cao).
-
----
-
-## 8. Speculative Decoding — Vị trí thật trong kế hoạch
-
-- Lý thuyết: draft-then-verify lossless về phân phối → thân thiện Accuracy Gate.
-- Thực tế Phase 1: **phụ thuộc draft model**; overhead có thể làm xấu TTFT dưới tải.
-- Quyết định: **không phải trụ cột**. Chỉ thử P1 với \(K=2\) sau Safe P0, có số ERS trước/sau.
-
----
-
-## 9. Anti-Cheat & Production Hygiene
-
-| Cấm (đề) | Cách đội mình tuân thủ |
+| Role | Focus mới |
 |---|---|
-| Pre-bake / hardcode | Không nhúng đáp án; inference realtime |
-| Dual-path | Một entrypoint / một sampling policy |
-| Gaming metrics | Không dummy pad / cắt output trái phép |
-| Gọi mạng ngoài | Image offline; không Firework lúc serve |
-| Tráo image | Pin digest; log submission |
-
-**Đạt được gì:** tránh void bài khi đã có ERS cao — rủi ro “top rồi bị hủy” lớn hơn rủi ro thiếu 2% throughput.
+| **AI1** | Model card LFM2.5; quant online/FP8; GPQA smoke; chat template |
+| **AI2** | Flags vLLM; ERS sim với F/C/γ/w thật; ablation sheet theo submit |
+| **DevOps** | Dockerfile bake `/model`; Hub push; compose mẫu BTC; anti-cheat; portal |
 
 ---
 
-## 10. Tổ chức 3 người (2 AI + 1 DevOps)
+## 9. Rủi ro chính
 
-```mermaid
-flowchart TB
-  subgraph roles [Team_RACI]
-    AI1[AI1_Model_Quant]
-    AI2[AI2_Serving_ERS]
-    DO[DevOps_Compose_Gate]
-  end
-  AI1 -->|FP8_artifact| DO
-  AI2 -->|runtime_flags| DO
-  DO -->|submission_digest| BTC[Leaderboard]
-  AI2 -->|ablation_table| AI1
-```
-
-| Vai trò | Trách nhiệm cốt lõi | Deliverable | Tool |
-|---|---|---|---|
-| **AI1 — Core Model & Quant** | Theo dõi công bố model; recipe FP8; kiểm Δ thô; chat template | Thư mục weights FP8 + báo cáo Δ smoke | `llm-compressor`, Firework, AMD |
-| **AI2 — Serving & Scheduling** | Flags vLLM; ERS sim; bảng ablation; đọc online score | `serve.sh` P0/P1 + ablation sheet | vLLM config, Python sim |
-| **DevOps — System & Eval** | Docker Compose H200; offline; healthcheck; lm_eval script; anti-cheat audit; lịch submit | `docker-compose.yml`, CI smoke, submission log | Docker, bash, `lm-eval` |
-
-**Sync:** 15 phút/ngày — unblock model/trace, credit còn lại, điểm ERS mới, quyết định nộp/giữ.
-
----
-
-## 11. Thứ tự Ưu tiên Kỹ thuật (P0 → P3)
-
-| Priority | Việc | Owner | Thành công khi |
-|---|---|---|---|
-| **P0** | Portal: lấy model/trace/params ngay khi có | Cả team | Unblock quant + sim |
-| **P0** | Compose + OpenAI streaming contract | DevOps + AI2 | Smoke local proxy pass |
-| **P0** | FP8 artifact + P0 serve flags | AI1 + AI2 | Load được trên AMD; nộp BTC |
-| **P0** | Error rate ≈ 0 (OOM/timeout) | AI2 + DevOps | Không thấy \(S=0\) hàng loạt |
-| **P1** | Sweep batched-tokens / mem-util trên online ERS | AI2 | ERS↑ so với P0 |
-| **P1** | KV-FP8 A/B | AI1 + AI2 | ERS↑ và smoke Δ ổn |
-| **P2** | Speculative nếu có draft | AI2 | ERS↑, TTFT không sập |
-| **P3** | FlashInfer / CUDA graphs tinh chỉnh | AI2 | Chỉ nếu còn ngày |
-
----
-
-## 12. Rủi ro & Mitigation
-
-| Rủi ro | Impact | Mitigation |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Model công bố muộn | Không kịp quant đẹp | Scaffold proxy + compose trước; reserving AMD session sẵn script |
-| Hết AMD credit giữa chừng | Không pack được FP8 | 2 session cứng; rehearse script local CPU path trước |
-| Tin latency AMD | Chọn sai config | Cấm dùng AMD TTFT làm quyết định |
-| OOM trên H200 | ERS sập | `gpu-memory-utilization` conservative; giảm max-model-len nếu đề cho phép |
-| FP8 + KV-FP8 cộng dồn Δ | \(f(\Delta)<1\) hoặc 0 | P0 không KV-FP8; đo smoke trước khi giữ |
-| Sai chat template / BOS | GPQA fail | Lock template; `add_bos_token` khi eval |
+| `v0.22.1` chưa chạy LFM2.5 | Không boot | Thử tag vLLM mới hơn; pin digest đã prove |
+| TPOT > 10ms dưới tải | ERS thấp (γ=2) | Prefix + chunked + giảm contention; quant/decode opts |
+| OOM 18GB | S = 0 | Hạ mem-util / max-model-len; đo peak concurrent |
+| Quant quá tay | f(Δ) < 1 hoặc 0 | P0 BF16; quant chỉ khi ERS↑ rõ |
+| Compose sai entrypoint | BTC không chấm | Copy form mẫu, chỉ sửa `command` flags + `image` |
 
 ---
 
-## 13. Metrics Nội bộ (team dashboard)
+## 10. Kết luận
 
-| Metric | Nguồn | Target Phase 1 |
-|---|---|---|
-| Submit success / health | DevOps log | Container up, `/v1/models` OK |
-| Online ERS | Leaderboard | Tăng dần theo ablation |
-| Error rate (ước lượng) | Log + sim | → 0 |
-| Δ smoke | Firework/AMD | Giữ cảm giác \(\ll 0.10\) |
-| Credit còn | Sheet | ≥ buffer 20% đến D-2 |
+Đề mới biến cuộc chơi từ “nén model khổng lồ” thành **serving edge-LLM trên VRAM hẹp, latency cực gắt, khai thác shared prefix**.  
 
----
-
-## 14. Những gì Cố ý Loại khỏi CONTEXT cũ
-
-Bản research trước đúng hướng nhưng **không khớp resource** và **overclaim**. Bản này chỉnh:
-
-| Cũ | Mới |
-|---|---|
-| AMD = staging cận production latency | AMD = artifact factory |
-| KV-FP8 “bắt buộc” | A/B P1 |
-| EAGLE 2–6× là trụ cột | Optional P1, \(K=2\) |
-| `batched-tokens=2048`, `mem=0.93` cứng | Sweep |
-| Firework = ground truth GPQA | Baseline thô; ưu tiên số BTC |
-| Essay dài chung chung | Decision + owner + credit + DoD |
-
----
-
-## 15. Kết luận Chiến lược
-
-Với điều kiện hiện tại (**chưa có model**, chỉ có đề + repo, resource hẹp), đường thắng thực tế là:
-
-1. **Scaffold ngay** (Compose, API contract, simulator, script quant) trước khi BTC mở model.  
-2. **Một artifact FP8 sạch + P0 flags ổn định** lên H200 sớm để có điểm.  
-3. **Ablation có kiểm soát** bằng online ERS, không đốt cloud.  
-4. **Giữ Δ an toàn** — Score = ERS × \(f(\Delta)\); mất accuracy gate = mất hết.  
-
-Chi tiết lịch ngày, checklist, và lệnh cụ thể nằm ở **[PLAN.md](PLAN.md)**.
+Thắng = **image đúng luật + prefix cache + TPOT ổn định dưới tải + không lỗi**, rồi mới quant/KV tinh chỉnh. Chi tiết lịch và checklist: **[PLAN.md](PLAN.md)**.

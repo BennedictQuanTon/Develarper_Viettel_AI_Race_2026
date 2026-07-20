@@ -1,8 +1,9 @@
 {
-  "f_ttft": 0.1,
-  "c_ttft": 2.0,
-  "f_tpot": 0.02,
-  "c_tpot": 0.15,
+  "f_ttft": 0.010,
+  "c_ttft": 0.400,
+  "f_tpot": 0.001,
+  "c_tpot": 0.010,
   "w": 0.5,
-  "gamma": 1.0
+  "gamma": 2.0,
+  "notes": "Official ERS params. Units are seconds (10ms=0.01s)."
 }

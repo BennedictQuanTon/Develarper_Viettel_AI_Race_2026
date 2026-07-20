@@ -1,25 +1,20 @@
-# Target eval env: Ubuntu 24.04 + NVIDIA Driver 590.x / CUDA 13.x / H200
-# Pin a concrete vLLM tag once BTC model + CUDA compatibility are confirmed.
-ARG VLLM_IMAGE=vllm/vllm-openai:v0.8.5
+# Build-time may use network. Runtime on BTC MiG must be offline.
+# BTC baseline: vllm/vllm-openai:v0.22.1
+# If LFM2.5 does not load, rebuild with e.g.:
+#   docker build --build-arg VLLM_IMAGE=vllm/vllm-openai:v0.23.0 -t ...
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.22.1
 FROM ${VLLM_IMAGE}
 
-WORKDIR /app
+ARG MODEL_ID=LiquidAI/LFM2.5-1.2B-Instruct
+ENV MODEL_ID=${MODEL_ID}
 
-# Serving scripts + default P0 config (weights copied when artifact exists)
-COPY scripts/serve.sh /app/scripts/serve.sh
-COPY configs/p0_safe.env /app/configs/p0_safe.env
-COPY configs/p1_aggressive.env /app/configs/p1_aggressive.env
-
-RUN chmod +x /app/scripts/serve.sh
-
-# When FP8 artifact is ready (AMD Session A), uncomment:
-# COPY model_weights/LLM-FP8 /model_weights/LLM-FP8
-
-ENV CONFIG_FILE=/app/configs/p0_safe.env
-ENV MODEL_PATH=/model_weights/LLM-FP8
-ENV PYTHONUNBUFFERED=1
+# Bake weights into /model (requires network during `docker build` only).
+RUN python3 -c "\
+from huggingface_hub import snapshot_download;\
+import os;\
+mid=os.environ['MODEL_ID'];\
+snapshot_download(repo_id=mid, local_dir='/model', local_dir_use_symlinks=False);\
+print('OK', mid, '-> /model')"
 
 EXPOSE 8000
-
-# Competition rule: no network fetch of weights at start — bake or mount offline.
-ENTRYPOINT ["/bin/bash", "/app/scripts/serve.sh"]

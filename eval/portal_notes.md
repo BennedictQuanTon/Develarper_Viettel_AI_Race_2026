@@ -1,14 +1,14 @@
-# Portal notes — check 2×/day until model + trace drop
+# Portal notes
 
-| Date | Model ID? | Trace file? | F/C/w/γ? | Compose template? | Notes |
-|---|---|---|---|---|---|
-| 2026-07-20 | no | no | no | no | Scaffold only; do not rent AMD yet |
-| | | | | | |
+| Date | Model | MiG | ERS params | Notes |
+|---|---|---|---|---|
+| 2026-07-20 | LiquidAI/LFM2.5-1.2B-Instruct | H200 18GB / 3CPU / 8GB RAM | F_ttft=10ms C=400ms; F_tpot=1ms C=10ms; γ=2; w=0.5 | Đề cập nhật — scaffold + docs refreshed |
+| | | | | |
 
-## Unblock checklist when model appears
+## Unblock checklist
 
-- [ ] Record exact model id / revision / license path
-- [ ] Download / mount instructions from BTC
-- [ ] Update `MODEL_PATH` and `MAX_MODEL_LEN` in `configs/*.env`
-- [ ] Schedule AMD MI300X Session A with `scripts/quant_fp8.py` ready
-- [ ] Drop public redacted trace under `eval/traces/` and run `ers_sim.py`
+- [ ] Confirm `vllm/vllm-openai:v0.22.1` loads LFM2.5; else newer vLLM tag
+- [ ] Public Hub image with `/model` baked
+- [ ] `docker-compose.submit.yml` entrypoint form unchanged
+- [ ] P0 submit → ERS recorded
+- [ ] Trace file (if published) under `eval/traces/`

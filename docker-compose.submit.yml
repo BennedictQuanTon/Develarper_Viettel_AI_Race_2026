@@ -1,0 +1,32 @@
+# Compose shape expected by BTC portal (Phase 1).
+# 1) Build & push a PUBLIC image with weights at /model (runtime offline).
+# 2) Replace `image:` with your Hub repo:tag (pin digest for freeze).
+# 3) Only edit `command` flags / image — keep entrypoint form.
+
+services:
+  model:
+    # TODO: replace with team public image, e.g. yourorg/develarper-lfm25:p0
+    image: vllm/vllm-openai:v0.22.1
+    entrypoint:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+    command:
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.95
+      - --tensor-parallel-size=1
+      - --enable-prefix-caching
+    ports:
+      - "8000:8000"
+    shm_size: "2g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

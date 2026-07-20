@@ -1,286 +1,196 @@
-# PLAN.md — Execution Playbook Phase 1  
+# PLAN.md — Execution Playbook Phase 1 (Updated)
 ## Viettel AI Race 2026 · Challenge 3 · Team Develarper
 
-> Plan vận hành A→Z để **execute**. Chiến lược kỹ thuật / lý do xem [CONTEXT.md](CONTEXT.md).  
-> **Deadline Phase 1:** 30/07/2026 · **Hôm nay giả định:** 20/07/2026 (~10 ngày).  
-> **Constraints:** BTC chưa công bố model / chưa cấp cluster; local 16–32GB ×3; ~100 Firework; ~50 AMD; team = 2 AI + 1 DevOps.
+> Chiến lược / lý do: [CONTEXT.md](CONTEXT.md) · Đề: [PROBLEM_VN.md](PROBLEM_VN.md)  
+> **Model:** `LiquidAI/LFM2.5-1.2B-Instruct` · **Slice:** MiG H200 **18GB** · **Engine:** vLLM only  
+> **Deadline Phase 1:** 30/07/2026
 
 ---
 
-## 0. North Star
+## 0. Hiểu đề trong 1 phút
 
-| Mục tiêu | Đo bằng |
+| Câu hỏi | Trả lời ngắn |
 |---|---|
-| Có submission Compose chạy trên H200 BTC | Health + điểm ERS trên leaderboard |
-| ERS tăng có kiểm soát | Bảng ablation (mỗi lần đổi 1 biến) |
-| Sẵn sàng Accuracy Gate | Δ smoke ≪ 0.10; anti-cheat checklist xanh |
-| Không cháy credit | Sheet credit cập nhật mỗi ngày |
+| Làm gì? | Serve model 1.2B bằng vLLM cho nhanh trên MiG 18GB |
+| Điểm online? | ERS từ TTFT + TPOT (w=0.5, γ=2) |
+| Floor/Ceiling? | TTFT 10–400ms · TPOT **1–10ms** |
+| Sau online? | Chọn ≤5 bài → GPQA; baseline ~0.4; Score=100×ERS×f(Δ) |
+| Nộp gì? | Docker Hub **public** image + `docker-compose.yml` |
+| Đòn bẩy #1? | **Prefix caching** (shared system prefix) |
 
-**Công thức thắng:** `Score = 100 × ERS × f(Δ)` với error rate → 0.
+### 10 ngày — học thuộc
 
----
+1. **Ngày 1–2:** Compose đúng mẫu BTC + bake model + verify boot (local GPU nếu có)  
+2. **Ngày 3:** ERS sim với params thật + hiểu trace fields  
+3. **Ngày 4–5:** Push Hub + nộp **P0** (prefix ON, gần baseline flags) lấy ERS  
+4. **Ngày 6–7:** Ablation 1 biến/lần (mem-util, batched-tokens, chunked, quant)  
+5. **Ngày 8–9:** Chọn winner; smoke GPQA; anti-cheat  
+6. **Ngày 10:** Freeze digest + nộp cuối  
 
-## 1. Roles & RACI
-
-| ID | Vai trò | Người | Owns | Decide |
-|---|---|---|---|---|
-| **AI1** | Model & Quant | Eng AI 1 | Weights FP8, recipe, Δ smoke, chat template | Scheme quant / giữ hay bỏ KV-FP8 về phía accuracy |
-| **AI2** | Serving & ERS | Eng AI 2 | vLLM flags, ERS simulator, ablation sheet | Giá trị `batched-tokens`, mem-util, bật/tắt spec |
-| **DO** | DevOps & Gate | Eng DevOps | Compose, offline image, smoke scripts, submit log, anti-cheat | Freeze digest nộp bài |
-
-**Daily standup (15’):** (1) portal có model/trace chưa? (2) credit còn? (3) ERS mới? (4) blocker? (5) nộp gì hôm nay?
-
----
-
-## 2. Credit Budget (cứng)
-
-### 2.1 Firework (~100)
-
-| Khoản | Budget | Owner |
-|---|---|---|
-| Baseline / proxy accuracy | 30–40 | AI1 |
-| Smoke sau quant (vài chục Q) | 20–30 | AI1 |
-| Buffer sự cố | 30+ | Lead giữ |
-
-**Cấm:** loop evaluation, so latency qua API.
-
-### 2.2 AMD (~50) — thuê gì?
-
-| Ưu tiên | GPU | Mục đích |
-|---|---|---|
-| **#1** | **MI300X 192GB** | Quant FP8 + load full model + smoke serve |
-| #2 | MI250 / nhỏ hơn | Chỉ khi MI300X hết quota / quá đắt |
-
-**Session plan (tối đa 2–3 session):**
-
-| Session | Mục tiêu | Chuẩn bị trước (bắt buộc) | Owner |
-|---|---|---|---|
-| **A** | Quant + export FP8 artifact | Script compress đã dry-run syntax local; biết model ID | AI1 + DO |
-| **B** | `vllm serve` FP8 + smoke lm_eval/subset | Compose/entrypoint sẵn; list prompt smoke | AI2 + DO |
-| **C (buffer)** | Re-quant / fix load lỗi | Chỉ khi A/B fail | AI1 |
-
-**Cấm:** dùng AMD để sweep TTFT/TPOT chọn config thắng.
+**AMD:** không còn bắt buộc (model 1.2B). Giữ credit dự phòng nếu cần GPU NVIDIA tạm.
 
 ---
 
-## 3. Repo Skeleton (đã dựng)
+## 1. North Star & ERS params (khóa)
 
 ```text
-.
-├── Dockerfile / docker-compose.yml   # profiles: mock | gpu
-├── scripts/
-│   ├── mock_openai_server.py         # CPU stub
-│   ├── smoke_openai.py
-│   ├── ers_sim.py
-│   ├── quant_fp8.py                  # --dry-run local; real on AMD
-│   ├── serve.sh
-│   └── lm_eval_smoke.sh
-├── configs/   p0_safe.env  p1_aggressive.env  ers_params.example.json
-├── eval/      ablation_sheet.md  portal_notes.md  credit_sheet.md  traces/
-└── model_weights/                    # gitignore weights
+Score = 100 × ERS × f(Δ)
 ```
 
-**DoD local:** `python scripts/mock_openai_server.py` + `python scripts/smoke_openai.py` → OK.
-
----
-
-## 4. Timeline 10 ngày (A→Z)
-
-### D0–D1 (20–21/07) — Unblock & Scaffold  
-**Goal:** repo chạy được contract API; theo dõi portal.
-
-| Task | Owner | Output |
-|---|---|---|
-| Check portal 2 lần/ngày: model, trace, F/C/w/γ, compose template | DO | Note trong `eval/portal_notes.md` |
-| Dockerfile + compose skeleton (CUDA 13 / Ubuntu 24.04 target) | DO | File compose build được |
-| `smoke_openai.py` (stream, TTFT/TPOT thô client-side) | AI2 | Pass với bất kỳ endpoint |
-| Phân công board + credit sheet | DO | Sheet shared |
-
-### D2 — Proxy correctness  
-**Goal:** logic serving đúng dù chưa có model BTC.
-
-| Task | Owner | Output |
-|---|---|---|
-| Chạy proxy Llama/Qwen 7B–8B local hoặc nhỏ trên cloud rẻ | AI1+AI2 | Chat template + stream OK |
-| Liệt kê failure modes (OOM, empty, non-stream) | AI2 | Checklist |
-
-### D3 — ERS simulator  
-**Goal:** sẵn sàng khi có redacted trace.
-
-| Task | Owner | Output |
-|---|---|---|
-| Parser trace (arrival, isl, osl, turn id) | AI2 | `ers_sim.py` v0 |
-| Công thức \(s_{ttft}, s_{tpot}\) parametrized | AI2 | Config YAML cho F/C/w/γ |
-| Profile giả định concurrency | AI2 | 1 trang note pattern |
-
-*Nếu chưa có trace:* viết sim với synthetic multi-turn; thay file thật sau 1 giờ có data.
-
-### D4–D5 — AMD Session A (Quant)  
-**Trigger:** có model ID. Nếu chưa có model → kéo scaffold/tests, **không đốt AMD**.
-
-| Task | Owner | Output |
-|---|---|---|
-| Thuê **MI300X** | DO | Instance |
-| Chạy `quant_fp8.py`, ignore `lm_head` | AI1 | Thư mục FP8 |
-| Verify load compressed-tensors | AI1+AI2 | Log OK |
-| Upload/pack artifact vào build context | DO | Sẵn build image |
-
-### D5–D6 — P0 ship  
-| Task | Owner | Output |
-|---|---|---|
-| `configs/p0_safe.env` + `serve.sh` | AI2 | Prefix + chunked ON; mem 0.90; batched-tokens 4096 |
-| Build image offline (no net on start) | DO | Image local |
-| Nộp submission P0 lên BTC | DO | Digest + ERS #1 |
-| Ghi ablation sheet dòng baseline | AI2 | Sheet |
-
-### D7 — Online ablation (1 biến / submission)  
-Thứ tự bắt buộc:
-
-1. `max-num-batched-tokens`: 2048 → 4096 → 8192  
-2. `gpu-memory-utilization`: 0.88 → 0.90 → 0.92  
-3. prefix on/off (chỉ để confirm; kỳ vọng ON thắng)
-
-| Rule | Chi tiết |
+| Param | Value |
 |---|---|
-| Giữ winner | Chỉ giữ thay đổi nếu ERS↑ và không tăng lỗi |
-| Stop | Nếu error xuất hiện → rollback ngay |
+| F_ttft / C_ttft | 10 ms / 400 ms |
+| F_tpot / C_tpot | 1 ms / 10 ms |
+| gamma | 2 |
+| w | 0.5 |
+| Acc baseline (ref) | 0.4 |
 
-### D8 — P1 optional  
-| Thí nghiệm | Điều kiện | Owner |
+File: [`configs/ers_params.example.json`](configs/ers_params.example.json) đã khớp số này.
+
+---
+
+## 2. Roles
+
+| ID | Owns | Decide |
 |---|---|---|
-| `--kv-cache-dtype fp8` | P0 ổn định | AI2+AI1 |
-| Speculative K=2 | Có official draft | AI2 |
-| Accuracy smoke | Credit còn | AI1 |
+| **AI1** | Weights bake path, online/FP8 quant, GPQA smoke | Có giữ quant không (theo Δ) |
+| **AI2** | vLLM flags, ers_sim, ablation sheet | Nút nào submit tiếp |
+| **DO** | Dockerfile, Hub push, compose form BTC, portal, checklist | Freeze tag/digest |
 
-### D9 — Gate & anti-cheat  
-| Task | Owner |
-|---|---|
-| Chạy audit checklist mục 6 | DO |
-| lm_eval smoke (nếu còn AMD/Firework) | AI1+DO |
-| Chọn 1–2 digest “an toàn” | Cả team |
-
-### D10 (29–30/07) — Freeze  
-| Task | Owner |
-|---|---|
-| Freeze config thắng | AI2 |
-| Rebuild pin versions | DO |
-| Nộp cuối + backup digest | DO |
-| Viết mô tả submission theo yêu cầu BTC | DO+AI2 |
+Daily 15’: portal / ERS mới / OOM? / submit gì hôm nay?
 
 ---
 
-## 5. Ablation Sheet (template)
-
-Copy vào `eval/ablation_sheet.md`:
-
-| ID | Date | Digest | Flags changed | ERS | Notes / errors | Keep? |
-|---|---|---|---|---|---|---|
-| P0 | | | prefix+chunked, bt=4096, mem=0.90 | | | Y |
-| A1 | | | bt=2048 | | | |
-| A2 | | | bt=8192 | | | |
-| A3 | | | mem=0.92 | | | |
-| B1 | | | kv=fp8 | | | |
-
----
-
-## 6. Anti-Cheat & Submit Checklist
-
-Trước mỗi lần nộp (DO tick):
-
-- [ ] Không gọi mạng ngoài khi container chạy  
-- [ ] Weights nằm trong image / volume hợp lệ theo đề  
-- [ ] Một entrypoint — không nhánh “nếu GPQA thì …”  
-- [ ] Streaming chat completions đúng contract  
-- [ ] Không hardcode đáp án / prebake trace  
-- [ ] Version pin ghi trong README submission  
-- [ ] Health: `GET /v1/models` hoặc tương đương  
-- [ ] Log digest + flags vào ablation sheet  
-
----
-
-## 7. Decision Tree — Khi BTC công bố Model
+## 3. Repo layout (đã scaffold — cập nhật theo đề)
 
 ```text
-Model announced
- ├─ Dense → AI1 quant FP8; AI2 P0 flags; DO pack
- ├─ MoE   → AI1 đọc doc MoE FP8 vLLM; không quant mù; escalate nếu OOM
- └─ MLA   → AI2 confirm vLLM support; fallback SGLang chỉ nếu unblock > 48h fail
-          └─ EAGLE draft official? yes → P1 K=2; no → skip spec
-```
-
-**SLA:** trong **24h** sau công bố model phải có (1) plan quant cụ thể, (2) lịch AMD Session A, (3) `max-model-len` đề xuất.
-
----
-
-## 8. Commands Cheat Sheet (sẽ chỉnh khi có path model)
-
-### Quant (AMD Session A)
-
-```bash
-# pseudocode — AI1 hoàn thiện script trong scripts/quant_fp8.py
-python scripts/quant_fp8.py \
-  --model "$MODEL_ID" \
-  --out /artifacts/LLM-FP8 \
-  --ignore-lm-head
-```
-
-### Serve P0
-
-```bash
-vllm serve /model_weights/LLM-FP8 \
-  --host 0.0.0.0 --port 8000 \
-  --gpu-memory-utilization 0.90 \
-  --enable-prefix-caching \
-  --enable-chunked-prefill \
-  --max-num-batched-tokens 4096
-```
-
-### lm_eval smoke
-
-```bash
-lm_eval --model local-chat-completions \
-  --tasks gpqa_diamond \
-  --model_args "model=FP8,base_url=http://127.0.0.1:8000/v1/chat/completions,tokenized_requests=False,add_bos_token=True" \
-  --num_fewshot 0
-```
-
-### Client smoke
-
-```bash
-python scripts/smoke_openai.py --base-url http://127.0.0.1:8000/v1 --stream
+Dockerfile                 # bake LiquidAI/LFM2.5-1.2B-Instruct -> /model
+docker-compose.yml         # BTC entrypoint form + mock profile
+docker-compose.submit.yml  # bản nộp Portal (image Hub của đội)
+configs/p0_safe.env        # flags P0
+configs/p1_aggressive.env
+configs/ers_params.example.json
+scripts/smoke_openai.py
+scripts/ers_sim.py
+scripts/mock_openai_server.py
+scripts/quant_fp8.py       # optional; model nhỏ
+eval/ablation_sheet.md
+eval/portal_notes.md
+eval/credit_sheet.md
 ```
 
 ---
 
-## 9. Risk Register (operational)
+## 4. Timeline chi tiết
 
-| Risk | Trigger | Action |
+### D1–D2 — Boot hợp lệ
+
+| Task | Owner | Done when |
 |---|---|---|
-| Chưa có model đến D4 | Portal trống | Không thuê AMD; hoàn thiện sim + compose + docs nộp |
-| Quant fail / OOM | Session A | Giảm sequence calibration; bỏ KV-FP8; hỏi thêm credit / MI300X |
-| ERS online = 0 hàng loạt | Sau submit | Kiểm tra stream, max tokens, OOM, port, compose GPU |
-| Credit AMD < 20% trước D8 | Sheet | Khoá P0; bỏ P1 |
-| Δ smoke xấu | Sau quant | Rollback BF16/FP16 serve nếu image cho phép; hoặc quant nhẹ hơn |
+| Confirm vLLM tag load được LFM2.5 (`v0.22.1` trước; fallback tag mới hơn nếu fail) | AI1+DO | `GET /v1/models` OK |
+| Dockerfile: COPY/download-at-build weights vào `/model` (build máy có net; **runtime offline**) | DO | Image chạy không cần HF token lúc start |
+| `docker-compose.yml` đúng entrypoint mẫu BTC | DO | Compose up → port 8000 |
+| `smoke_openai.py` stream pass | AI2 | OK |
+| Ghi tag vào `eval/portal_notes.md` | DO | |
+
+### D3 — Trace & simulator
+
+| Task | Owner | Done when |
+|---|---|---|
+| Parse / giả lập theo fields: shared_system_prefix, per_conv_prefix, turns, arrival | AI2 | |
+| `ers_sim.py --params configs/ers_params.example.json` | AI2 | Ranking configs |
+| Ước concurrency từ `num_conversations` | AI2 | Note 1 trang |
+
+### D4–D5 — P0 submit
+
+| Task | Owner | Done when |
+|---|---|---|
+| Push image **public** Docker Hub | DO | URL Hub |
+| Compose submit: image đội + flags P0 (`--enable-prefix-caching`, mem~0.95, max-model-len hợp lý) | DO+AI2 | |
+| Nộp Portal → có ERS | Cả team | ERS trên leaderboard |
+| Dòng P0 trong ablation sheet | AI2 | |
+
+**P0 command gợi ý (bắt đầu gần mẫu BTC):**
+
+```text
+--model=/model
+--served-model-name=LFM2.5-1.2B-Instruct
+--host=0.0.0.0 --port=8000
+--max-model-len=32768
+--gpu-memory-utilization=0.95
+--tensor-parallel-size=1
+--enable-prefix-caching
+```
+
+### D6–D7 — Ablation (1 biến / submit)
+
+Thứ tự:
+
+1. `gpu-memory-utilization`: 0.90 ↔ 0.95  
+2. `max-num-batched-tokens` (nếu dùng): 2048 / 4096 / 8192  
+3. chunked prefill on/off  
+4. online FP8 / quantization flag  
+5. `kv-cache-dtype=fp8`  
+
+Rule: ERS↑ và không tăng lỗi → giữ; rollback nếu timeout/OOM.
+
+### D8–D9 — Quality + hygiene
+
+| Task | Owner |
+|---|---|
+| GPQA smoke (local/Firework tiết kiệm) vs baseline 0.4 | AI1 |
+| Anti-cheat checklist | DO |
+| Chọn 1–2 digest ứng viên top-5 sau này | Team |
+
+### D10 — Freeze
+
+Pin digest, rebuild sạch, nộp cuối, không sửa sát giờ.
 
 ---
 
-## 10. Definition of Done — Phase 1
+## 5. Ablation sheet
 
-- [ ] `docker-compose.yml` nộp được theo thể lệ  
-- [ ] Ít nhất **1** P0 có ERS > 0 trên leaderboard  
-- [ ] Ablation sheet ≥ 3 dòng thử có kiểm soát  
-- [ ] Anti-cheat checklist xanh trên digest cuối  
-- [ ] Credit sheet cập nhật; còn buffer hoặc đã freeze có chủ đích  
-- [ ] CONTEXT + PLAN khớp thực tế đã làm (retro ngắn D10)  
+Xem [`eval/ablation_sheet.md`](eval/ablation_sheet.md) — cập nhật cột flags cho LFM2.5 / MiG 18GB.
 
 ---
 
-## 11. Ngay bây giờ (next 48h) — việc cụ thể
+## 6. Anti-cheat checklist (mỗi lần nộp)
 
-1. **DO:** tạo skeleton repo + `docker-compose.yml` + Dockerfile target CUDA 13 / Ubuntu 24.04.  
-2. **AI2:** `smoke_openai.py` + khung `ers_sim.py`.  
-3. **AI1:** khung `quant_fp8.py` + theo dõi portal model; chuẩn bị account AMD MI300X.  
-4. **Cả team:** credit sheet + standup 15’.  
-5. **Không** thuê AMD cho đến khi có model ID + script sẵn.
+- [ ] Image public; tag/digest khớp compose  
+- [ ] Không mạng ngoài khi container chạy  
+- [ ] Weights trong `/model` (hoặc path compose khai báo), không pull HF lúc start  
+- [ ] Entrypoint đúng form BTC (`python3 -m vllm.entrypoints.openai.api_server`)  
+- [ ] Một behavior (không dual-path)  
+- [ ] Streaming chat completions OK  
+- [ ] Ghi ablation sheet  
 
-Khi BTC công bố model: nhảy thẳng **§7 + Session A (D4–D5)** — bỏ qua chờ lịch nếu script đã sẵn.
+---
+
+## 7. Credit sheet (cập nhật tư duy)
+
+| Nguồn | Cách dùng mới |
+|---|---|
+| Firework | Ít lần GPQA smoke |
+| AMD | Optional; ưu tiên local NVIDIA / BTC submit làm lab |
+| BTC submits | Lab ERS chính |
+
+---
+
+## 8. Definition of Done — Phase 1
+
+- [ ] Image Hub public chạy offline trên giả lập GPU  
+- [ ] Compose form BTC nộp được, ERS > 0  
+- [ ] ≥3 dòng ablation có kiểm soát  
+- [ ] Prefix caching ON trên winner  
+- [ ] Smoke Δ cảm giác an toàn vs ~0.4  
+- [ ] Checklist anti-cheat xanh  
+
+---
+
+## 9. Next 48 hours (làm ngay)
+
+1. **DO+AI1:** thử `vllm/vllm-openai:v0.22.1` load `LiquidAI/LFM2.5-1.2B-Instruct`; nếu fail → chọn tag mới hơn.  
+2. **DO:** Dockerfile bake `/model` + `docker-compose.submit.yml` form BTC.  
+3. **AI2:** khóa `ers_sim` với params thật; chuẩn bị ablation.  
+4. **AI1:** đọc chat template LFM2.5; kế hoạch online quant.  
+5. Push Hub + nộp P0 sớm để có số ERS thật.

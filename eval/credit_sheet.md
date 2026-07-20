@@ -1,11 +1,11 @@
 # Credit sheet
 
-| Date | Firework used | Firework left (~100) | AMD used | AMD left (~50) | What for | Owner |
+| Date | Firework used | Left (~100) | AMD used | Left (~50) | What for | Owner |
 |---|---|---|---|---|---|---|
-| 2026-07-20 | 0 | 100 | 0 | 50 | scaffold — no cloud | team |
+| 2026-07-20 | 0 | 100 | 0 | 50 | Docs+scaffold update; AMD optional for 1.2B | team |
 
-## Rules
+## Rules (updated)
 
-- Firework: baseline + rare smoke only
-- AMD: max 2–3 sessions (quant + functional smoke); never latency sweeps
-- Keep ≥20% buffer until D-2
+- Model is **1.2B** → prefer local/NVIDIA build; AMD optional only
+- Firework: rare GPQA smoke vs baseline ~0.4
+- BTC Hub submits = primary ERS lab
