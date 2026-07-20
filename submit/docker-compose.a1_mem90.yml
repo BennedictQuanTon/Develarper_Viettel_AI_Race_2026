@@ -1,0 +1,28 @@
+# Ablation A1 — lower memory util (safer on 18GB if OOM)
+services:
+  model:
+    image: YOUR_DOCKERHUB/develarper-lfm25:p0
+    entrypoint:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+    command:
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=32768
+      - --gpu-memory-utilization=0.90
+      - --tensor-parallel-size=1
+      - --enable-prefix-caching
+      - --disable-log-requests
+    ports:
+      - "8000:8000"
+    shm_size: "2g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

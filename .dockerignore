@@ -1,0 +1,11 @@
+.git
+.gitignore
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/.cache
+model_weights/**/.cache
+.eval
+*.log
+.venv
+venv

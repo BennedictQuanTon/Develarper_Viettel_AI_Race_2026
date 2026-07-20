@@ -1,47 +1,44 @@
-# Viettel AI Race 2026 — Challenge 3: LLM Inference Optimization
+# Viettel AI Race 2026 — Challenge 3
 
-Team **Develarper** · Model **LiquidAI/LFM2.5-1.2B-Instruct** · Eval slice **MiG H200 18GB** · Engine **vLLM only** · Phase 1 deadline **30/07/2026**
-
-## Objective
-
-Maximize online **ERS** (TTFT + TPOT), then keep GPQA drop **Δ ≤ 0.10** vs BF16 baseline (~0.4) so final score stays full.
+**Develarper** · `LiquidAI/LFM2.5-1.2B-Instruct` · MiG H200 **18GB** · **vLLM only** · Deadline **30/07/2026**
 
 ```text
 Score = 100 × ERS × f(Δ)
+TTFT 10–400 ms · TPOT 1–10 ms · γ=2 · w=0.5 · GPQA baseline≈0.4
 ```
 
-| ERS knobs | Value |
-|---|---|
-| TTFT floor / ceiling | 10 ms / 400 ms |
-| TPOT floor / ceiling | 1 ms / 10 ms |
-| gamma / w | 2 / 0.5 |
+## Ship P0 (read this)
 
-## Strategy (updated for new brief)
-
-1. Public Docker Hub image with weights baked at `/model` (runtime **offline**)
-2. Submit `docker-compose.yml` using BTC entrypoint form (`python3 -m vllm.entrypoints.openai.api_server`)
-3. **Prefix caching ON** — trace shares a system prefix across conversations
-4. Tune for **TPOT ≤ ~10 ms** under concurrent multi-turn load on **18GB**
-5. Online / FP8 quantization as P1 after a stable BF16/P0 ERS
-6. Use BTC submissions as the real latency lab (not AMD)
-
-Docs: [CONTEXT.md](CONTEXT.md) · [PLAN.md](PLAN.md) · [PROBLEM_VN.md](PROBLEM_VN.md) · [PROBLEM.md](PROBLEM.md)
-
-## Quick local smoke (no GPU)
+Full checklist: **[SUBMIT.md](SUBMIT.md)**
 
 ```bash
-python scripts/mock_openai_server.py --port 8000
-python scripts/smoke_openai.py --base-url http://127.0.0.1:8000/v1
-python scripts/ers_sim.py --synthetic --params configs/ers_params.example.json
+docker login
+make download-model
+make build IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
+./scripts/set_image.sh <you>/develarper-lfm25:p0
+make push IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
+# Upload docker-compose.submit.yml to Portal as docker-compose.yml
 ```
 
-## Submit-shaped compose
+LFM2.5 needs **vLLM ≥ 0.23** (Dockerfile defaults to `latest-cu130`). BTC sample `v0.22.1` may not load the model.
 
-See [`docker-compose.submit.yml`](docker-compose.submit.yml) (BTC entrypoint form). Replace `image:` with your public Hub tag after bake.
+## Docs
 
-Baseline reference image: `vllm/vllm-openai:v0.22.1`  
-Weights: https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct
+| File | What |
+|---|---|
+| [CONTEXT.md](CONTEXT.md) | Why this strategy |
+| [PLAN.md](PLAN.md) | Day plan / RACI |
+| [PROBLEM_VN.md](PROBLEM_VN.md) | Official brief (VN) |
+| [SUBMIT.md](SUBMIT.md) | How to push & submit |
 
-## Team
+## Local tools (no GPU)
 
-2× AI (model/quant + serving/ERS) · 1× DevOps (image, Hub, compose, portal)
+```bash
+make ers-sim
+make smoke-mock   # then: python scripts/smoke_openai.py
+make preflight
+```
+
+## Ablation composes
+
+See `submit/docker-compose.*.yml` — change one flag per Portal submit; log ERS in `eval/ablation_sheet.md`.

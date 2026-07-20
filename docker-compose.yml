@@ -1,6 +1,5 @@
-# Local/dev compose.
-# - profile `mock`: CPU stub for API smoke
-# - profile `gpu`: team image / vLLM (needs NVIDIA + baked or mounted /model)
+# Local/dev compose (not for portal).
+# Portal submit file: docker-compose.submit.yml
 
 services:
   mock:
@@ -13,10 +12,9 @@ services:
       - "8000:8000"
     profiles: ["mock"]
 
+  # GPU path: use pre-built competition image (after make build)
   model:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ${IMAGE_REPO:-develarper-lfm25:p0}
     entrypoint:
       - python3
       - -m
@@ -30,6 +28,7 @@ services:
       - --gpu-memory-utilization=0.95
       - --tensor-parallel-size=1
       - --enable-prefix-caching
+      - --disable-log-requests
     ports:
       - "8000:8000"
     shm_size: "2g"

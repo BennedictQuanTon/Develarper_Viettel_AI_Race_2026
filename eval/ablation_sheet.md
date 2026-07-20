@@ -1,11 +1,9 @@
-# Ablation — LFM2.5-1.2B on MiG H200 18GB (change ONE flag per submit)
+# Ablation — LFM2.5-1.2B on MiG H200 18GB (ONE flag change per Portal submit)
 
-| ID | Date | Hub digest/tag | Flags changed | ERS | Errors / notes | Keep? |
-|---|---|---|---|---|---|---|
-| P0 | | | prefix ON, mem=0.95, max-model-len=32768 (BTC-like) | | baseline | |
-| A1 | | | gpu-memory-utilization=0.90 | | | |
-| A2 | | | max-num-batched-tokens=2048 | | | |
-| A3 | | | max-num-batched-tokens=8192 | | | |
-| A4 | | | enable-chunked-prefill | | | |
-| B1 | | | quantization=fp8 (online) | | check Δ | |
-| B2 | | | kv-cache-dtype=fp8 | | | |
+| ID | Date | Hub tag/digest | Compose file | Flags | ERS | Errors | Keep? |
+|---|---|---|---|---|---|---|---|
+| P0 | | | docker-compose.submit.yml | prefix ON, mem=0.95, max-len=32768 | | | |
+| A1 | | | submit/docker-compose.a1_mem90.yml | mem=0.90 | | | |
+| A2 | | | submit/docker-compose.a2_chunked.yml | chunked + batched-tokens=4096 | | | |
+| B1 | | | submit/docker-compose.b1_fp8.yml | quantization=fp8 | | check Δ | |
+| B2 | | | submit/docker-compose.b2_kvfp8.yml | kv-cache-dtype=fp8 | | | |

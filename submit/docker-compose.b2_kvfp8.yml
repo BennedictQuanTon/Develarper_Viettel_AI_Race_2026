@@ -1,13 +1,4 @@
-# =============================================================================
-# PORTAL SUBMIT FILE — copy/rename to docker-compose.yml when uploading
-# =============================================================================
-# Before submit:
-#   1) make download-model && make build && make push IMAGE_REPO=<you>/develarper-lfm25
-#   2) set image: below to that public tag (prefer digest pin)
-#   3) keep entrypoint exactly as BTC sample (python3 -m vllm.entrypoints.openai.api_server)
-#
-# Default image base: CUDA13 vLLM (LFM2.5 needs >=0.23). Do NOT use v0.22.1 unless verified.
-
+# Ablation B2 — FP8 KV cache (more concurrent conversations on 18GB)
 services:
   model:
     image: YOUR_DOCKERHUB/develarper-lfm25:p0
@@ -24,6 +15,7 @@ services:
       - --gpu-memory-utilization=0.95
       - --tensor-parallel-size=1
       - --enable-prefix-caching
+      - --kv-cache-dtype=fp8
       - --disable-log-requests
     ports:
       - "8000:8000"

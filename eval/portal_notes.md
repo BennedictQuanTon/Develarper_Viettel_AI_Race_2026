@@ -1,14 +1,15 @@
 # Portal notes
 
-| Date | Model | MiG | ERS params | Notes |
-|---|---|---|---|---|
-| 2026-07-20 | LiquidAI/LFM2.5-1.2B-Instruct | H200 18GB / 3CPU / 8GB RAM | F_ttft=10ms C=400ms; F_tpot=1ms C=10ms; γ=2; w=0.5 | Đề cập nhật — scaffold + docs refreshed |
-| | | | | |
+| Date | Item | Status |
+|---|---|---|
+| 2026-07-20 | Model LiquidAI/LFM2.5-1.2B-Instruct downloaded locally (2.2G) | OK |
+| 2026-07-20 | Dockerfile bake /model + submit composes + Makefile | OK |
+| 2026-07-20 | vLLM base `latest-cu130` (≥0.23 for LFM2.5) | OK |
+| 2026-07-20 | Docker Desktop daemon | **Need user to start** before `make build` |
+| | Hub push + Portal P0 ERS | TODO |
 
-## Unblock checklist
+## After first ERS
 
-- [ ] Confirm `vllm/vllm-openai:v0.22.1` loads LFM2.5; else newer vLLM tag
-- [ ] Public Hub image with `/model` baked
-- [ ] `docker-compose.submit.yml` entrypoint form unchanged
-- [ ] P0 submit → ERS recorded
-- [ ] Trace file (if published) under `eval/traces/`
+- [ ] Record P0 ERS in ablation_sheet
+- [ ] Run A1/A2 then B1/B2 if stable
+- [ ] Pin winning digest

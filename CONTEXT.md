@@ -75,7 +75,7 @@ Lỗi / timeout / 0 token → **S = 0**. Trên 18GB, OOM khi tăng concurrency v
 - **Context:** tới 32K (đề mẫu `--max-model-len=32768`)
 - **vLLM:** native `Lfm2ForCausalLM` (công thức serve theo docs Liquid/vLLM recipes)
 
-**Rủi ro version:** baseline BTC là `vllm/vllm-openai:v0.22.1`. Một số recipe LFM2.5 ghi min version mới hơn. **Việc P0:** verify model load trên `v0.22.1`; nếu fail → image vLLM mới hơn (public Docker Hub) miễn vẫn là vLLM + đúng entrypoint form.
+**Version đã chốt trong repo:** Dockerfile mặc định `vllm/vllm-openai:latest-cu130` vì docs Liquid/vLLM pin LFM2.5 ở **≥ 0.23.0**. Mẫu BTC `v0.22.1` có nguy cơ **không load** `Lfm2ForCausalLM` — chỉ dùng nếu verify được. Entrypoint vẫn đúng form BTC (`python3 -m vllm.entrypoints.openai.api_server`).
 
 ### 4.2 Kiến trúc serving
 

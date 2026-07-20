@@ -187,10 +187,16 @@ Xem [`eval/ablation_sheet.md`](eval/ablation_sheet.md) — cập nhật cột fl
 
 ---
 
-## 9. Next 48 hours (làm ngay)
+## 9. Next actions (submit-ready pipeline)
 
-1. **DO+AI1:** thử `vllm/vllm-openai:v0.22.1` load `LiquidAI/LFM2.5-1.2B-Instruct`; nếu fail → chọn tag mới hơn.  
-2. **DO:** Dockerfile bake `/model` + `docker-compose.submit.yml` form BTC.  
-3. **AI2:** khóa `ers_sim` với params thật; chuẩn bị ablation.  
-4. **AI1:** đọc chat template LFM2.5; kế hoạch online quant.  
-5. Push Hub + nộp P0 sớm để có số ERS thật.
+Đã có trong repo: `Makefile`, `SUBMIT.md`, `submit/*.yml`, bake Dockerfile (≥v0.23/cu130), `ers_sim` theo meta trace, `scripts/set_image.sh`.
+
+```bash
+make download-model
+make build IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
+./scripts/set_image.sh <you>/develarper-lfm25:p0
+make push IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
+# Portal: upload docker-compose.submit.yml
+```
+
+Chi tiết: **[SUBMIT.md](SUBMIT.md)**.
