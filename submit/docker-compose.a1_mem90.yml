@@ -15,7 +15,6 @@ services:
       - --gpu-memory-utilization=0.90
       - --tensor-parallel-size=1
       - --enable-prefix-caching
-      - --disable-log-requests
     ports:
       - "8000:8000"
     shm_size: "2g"

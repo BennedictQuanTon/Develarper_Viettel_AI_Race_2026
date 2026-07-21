@@ -16,7 +16,6 @@ services:
       - --tensor-parallel-size=1
       - --enable-prefix-caching
       - --kv-cache-dtype=fp8
-      - --disable-log-requests
     ports:
       - "8000:8000"
     shm_size: "2g"
