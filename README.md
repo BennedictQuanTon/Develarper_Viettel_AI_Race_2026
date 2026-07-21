@@ -5,19 +5,24 @@
 **Model:** [`LiquidAI/LFM2.5-1.2B-Instruct`](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct)  
 **Eval hardware:** 1× MiG H200 (**18GB VRAM**, 3 CPU, 8GB RAM) · Ubuntu 24.04 · Driver 590.x / CUDA 13.x  
 **Engine (required):** **vLLM only**  
-**Submission artifact:** public Docker Hub image + Portal `docker-compose.yml`
+**Submission:** public Docker Hub image + Portal file **`docker-compose.yml`**
 
 ```text
 Score = 100 × ERS × f(Δ)
-ERS params: TTFT 10–400 ms · TPOT 1–10 ms · γ=2 · w=0.5
+ERS: TTFT 10–400 ms · TPOT 1–10 ms · γ=2 · w=0.5
 GPQA baseline (ref): ~0.4 · Δ ≤ 0.10 → f(Δ)=1
 ```
+
+| Submission | Hub image | Score / ERS | Status |
+|---|---|---|---|
+| **P0** (2026-07-21 13:31) | `longquanton/develarper-lfm25:p0` | **49.81** (fΔ=1 → ERS≈0.498) | Baseline BF16 · Accuracy Gate candidate |
+| **S1S2** (one-shot, same day) | same `p0` | *pending Portal* | Current Portal compose |
+
+Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md)
 
 ---
 
 ## 1. Problem summary
-
-Optimize serving of a fixed Instruct model under a **multi-turn production-like trace**:
 
 | Workload field (BTC) | Value |
 |---|---|
@@ -27,171 +32,203 @@ Optimize serving of a fixed Instruct model under a **multi-turn production-like 
 | New user tokens / turn | **150** |
 | Output tokens / turn (pinned) | **300** |
 | Arrival | Poisson, seed 42 |
+| Peak context (est. turn 6) | **~4400** tokens |
 
-Online leaderboard = **ERS only**. Accuracy Gate (GPQA) runs **after** the online round on ≤5 chosen submissions.
-
-Full brief: [PROBLEM_VN.md](PROBLEM_VN.md) · [PROBLEM.md](PROBLEM.md)
+Online = **ERS only**. After online: choose ≤5 submissions → BTC hậu kiểm → GPQA full → final Score.
 
 ---
 
-## 2. What we built (deliverables)
+## 2. Official P0 results (Portal)
+
+| Metric | Value | Reading |
+|---|---|---|
+| Score | **49.81** | ≈ 100 × ERS × 1 |
+| ERS | **~0.498** | |
+| failed_count | **7 / 420** | Each fail → request score 0 |
+| ttft_p50 / p95 | **48 / 84 ms** | Comfortable vs ceiling 400 |
+| tbt_median (TPOT proxy) | **6 ms** | **Main bottleneck** (ceiling 10, floor 1, γ=2) |
+| accuracy_drop | 0 | Online display; GPQA later |
+
+**ERS sensitivity (why we chase TPOT):** with TTFT≈48 ms fixed, TPOT 6→3 ms lifts estimated ERS ~0.50→~0.70. TTFT improvements yield far less.
+
+---
+
+## 3. What we optimized (S1S2)
+
+Constraint on 2026-07-21: **one remaining daily submit** → compound one-shot (no image rebuild).
+
+| Knob | P0 | S1S2 (current `docker-compose.yml`) | Why |
+|---|---|---|---|
+| Image | `…:p0` | **unchanged** | Already scored; don’t overwrite tag |
+| `--max-model-len` | 32768 | **8192** | Workload peak ~4.4k; free KV on 18GB → concurrency↑, preemption/fail↓ |
+| Chunked prefill | (default) | **`--enable-chunked-prefill`** | Prefer decode under multi-turn load |
+| `--max-num-batched-tokens` | unset | **2048** | Smaller budget → better ITL/TPOT; TTFT still has headroom |
+| Prefix / mem / TP | ON / 0.95 / 1 | same | Keep BTC-aligned baseline |
+| Quant | BF16 | BF16 | FP8 deferred (Accuracy Gate + one-shot risk) |
+
+**Not in this shot:** online FP8, KV-FP8, `--optimization-level 3`, speculative decoding (next days if S1S2 wins or needs pivot).
+
+Archives: [`submit/docker-compose.p0_baseline.yml`](submit/docker-compose.p0_baseline.yml) · [`submit/docker-compose.s1s2_oneshot.yml`](submit/docker-compose.s1s2_oneshot.yml)
+
+---
+
+## 4. Deliverables
 
 | Deliverable | Detail |
 |---|---|
-| Competition image | `longquanton/develarper-lfm25:p0` (public Hub, **linux/amd64**) |
-| Compose for Portal | [`docker-compose.yml`](docker-compose.yml) |
-| Ablation variants | [`submit/`](submit/) — mem90 / chunked / fp8 / kv-fp8 |
-| Weights bake | Model copied to `/model` at image build (runtime **offline**) |
-| Local tooling | download, preflight, smoke, ERS simulator, set_image |
-| Docs | CONTEXT (strategy), PLAN (ops), SUBMIT (ship), this README |
+| Competition image | `longquanton/develarper-lfm25:p0` — public, **linux/amd64**, vLLM **0.23.0**, weights at `/model` |
+| Portal compose (current) | [`docker-compose.yml`](docker-compose.yml) = **S1S2** |
+| Ablation library | [`submit/`](submit/) — p0 archive, S1S2, mem90, chunked-only, fp8, kv-fp8 |
+| Metrics log | [`eval/ablation_sheet.md`](eval/ablation_sheet.md) |
+| Tooling | `Makefile`, download / preflight / smoke / `ers_sim` / `set_image` |
 
 ---
 
-## 3. Stack & versions used
+## 5. Stack
 
 | Component | Choice | Why |
 |---|---|---|
-| Serving framework | **vLLM** | Required by rules |
-| Base image | `vllm/vllm-openai:v0.23.0` | LFM2.5 needs **≥0.23** (`Lfm2ForCausalLM`); BTC sample `v0.22.1` is risky |
-| Model | LFM2.5-1.2B-Instruct (~2.2GB BF16) | Official BTC model |
-| Build platform | `linux/amd64` via Docker Buildx | Match MiG H200 (not Mac arm64) |
-| Quant (P0) | None (BF16/default weights) | Stable first ERS; FP8 = later ablation |
-| Prefix cache | **ON** | Shared 1000-token system prefix across 70 conversations |
-| Memory util (P0) | `0.95` | Match BTC sample; 18GB slice |
-| max-model-len (P0) | `32768` | Model context; may tune if KV pressure |
+| Framework | **vLLM only** | Rules |
+| Base image | `vllm/vllm-openai:v0.23.0` | LFM2.5 needs ≥0.23; sample `v0.22.1` may not load `Lfm2ForCausalLM` |
+| Model path | `/model` (baked) | Offline runtime — no HF at serve |
+| Entrypoint | `python3 -m vllm.entrypoints.openai.api_server` | BTC form (not `vllm-server`) |
+| Build | Docker Buildx `linux/amd64` | Match MiG |
 
 ---
 
-## 4. Architecture
+## 6. Architecture
 
 ```text
-┌─────────────────┐     pull public image      ┌──────────────────────────┐
-│  BTC Portal     │ ─────────────────────────► │  MiG H200 18GB           │
-│  + compose.yml  │                            │  docker compose up       │
-└─────────────────┘                            │  vLLM OpenAI API :8000   │
-                                               │  weights at /model       │
-                                               │  prefix cache + batching │
-                                               └────────────┬─────────────┘
-                                                            │ ERS (TTFT/TPOT)
-                                                            ▼
-                                                     Leaderboard
+Portal upload docker-compose.yml
+        │
+        ▼
+BTC pulls longquanton/develarper-lfm25:p0
+        │
+        ▼
+MiG H200 18GB · vLLM OpenAI :8000 · /model
+  · prefix cache · chunked prefill · maxlen 8192 · bt 2048
+        │
+        ▼
+ERS (TTFT + TPOT) → leaderboard
+(post-online) ≤5 picks → GPQA → Score
 ```
 
-**P0 serve path (inside container):**
+**Current serve command (S1S2):**
 
 ```text
 python3 -m vllm.entrypoints.openai.api_server
   --model=/model
   --served-model-name=LFM2.5-1.2B-Instruct
   --host=0.0.0.0 --port=8000
-  --max-model-len=32768
+  --max-model-len=8192
   --gpu-memory-utilization=0.95
   --tensor-parallel-size=1
   --enable-prefix-caching
+  --enable-chunked-prefill
+  --max-num-batched-tokens=2048
 ```
 
-Entrypoint form matches BTC sample (do **not** replace with `vllm serve` CLI if Portal expects this form).
+---
+
+## 7. Optimization roadmap (post-S1S2)
+
+Priority: **failed→0** then **TPOT→1–3 ms**, keep ≥1 BF16 digest for GPQA.
+
+| Next (when daily quota resets) | Action |
+|---|---|
+| S1S2 ERS↑ & fail≤7 | Keep as BF16 best; try **online FP8** (`submit/docker-compose.b1_fp8.yml`) |
+| Fail↑ / score↓ (maxlen?) | Soften to `max-model-len=12288` or restore P0 flags |
+| TPOT still ≥5 ms | Image `p1` + `--optimization-level 3`, then n-gram speculative |
+| Always | Do **not** overwrite Hub tag `p0`; use `p1`/`p2` for new images |
+
+Full ranked levers: [PLAN.md](PLAN.md).
 
 ---
 
-## 5. Optimization strategy (priority order)
+## 8. Work log
 
-1. **Reliability** — no OOM / timeout / 0-token → each failure is `S_request = 0`
-2. **Prefix caching** — exploit `shared_system_prefix_tokens=1000` + multi-turn history
-3. **TPOT under load** — ceiling only **10 ms**; 300 output tokens × 420 requests
-4. **TTFT** — floor 10 ms / ceiling 400 ms; γ=2 → steep penalty away from floor
-5. **P1 ablations** (after P0 ERS exists): mem-util, chunked prefill, online FP8, KV-FP8
-
-Strategy rationale: [CONTEXT.md](CONTEXT.md) · Day plan: [PLAN.md](PLAN.md)
-
----
-
-## 6. What we did (work log)
-
-1. Parsed updated problem (model fixed, MiG 18GB, ERS params published, vLLM-only).
-2. Scaffolded repo: Dockerfile, compose, scripts, Makefile, eval sheets.
-3. Downloaded Instruct weights locally (`model_weights/`, gitignored).
-4. Built `develarper-lfm25:p0` on **vLLM 0.23.0** with `/model` baked; verified `config.json` / `Lfm2ForCausalLM`.
-5. Pushed public image: **`longquanton/develarper-lfm25:p0`**.
-6. Wired Portal compose to that tag; prepared ablation composes.
-7. Ingested BTC workload meta → `eval/traces/btc_workload_meta.json`.
-8. Ran local preflight + mock API smoke + ERS ranking simulator.
+1. Parsed BTC brief (fixed model, MiG 18GB, vLLM-only, ERS params).
+2. Scaffolded Dockerfile / compose / scripts / Makefile / eval sheets.
+3. Downloaded Instruct weights; baked into Hub image `p0` (amd64, public).
+4. Fixed Portal issues (filename must be `docker-compose.yml`; dropped invalid `--disable-log-requests` on v0.23).
+5. **P0 scored 49.81** — diagnosed TPOT + fails as bottlenecks.
+6. Researched compliant high-leverage knobs; updated PLAN for one remaining submit.
+7. Shipped **S1S2** compose (maxlen 8192 + chunked + bt 2048); awaiting Portal metrics.
 
 ---
 
-## 7. Checks & tests
+## 9. Checks & tests
 
-| ID | Check / test | Environment | Result | Meaning |
-|---|---|---|---|---|
-| T1 | `scripts/preflight.sh` | Mac local | **PASS** | Weights path, compose form, scripts compile |
-| T2 | Mock OpenAI streaming (`smoke_openai.py`) | CPU mock server | **PASS** | API contract / streaming client OK |
-| T3 | `ers_sim.py` + BTC meta + official F/C/γ/w | Local ranking | **PASS** | Prefix ON helps vs OFF (`ERS_hat` ~0.38 vs ~0.22) — **not** official score |
-| T4 | HF download LFM2.5-1.2B-Instruct | Local | **PASS** | ~2.2GB safetensors + tokenizer |
-| T5 | Docker build bake `/model` | Buildx amd64 | **PASS** | Image contains model files |
-| T6 | Hub push + public repo | Docker Hub | **PASS** | Tag `p0`, `is_private=false`, amd64 |
-| T7 | Compose vs BTC sample fields | Review | **PASS** | entrypoint / model path / name / port / prefix / GPU |
-| T8 | Live vLLM on MiG H200 | BTC infra | **Pending** | Measured only after Portal submit |
-| T9 | Official ERS | Portal | **Pending** | Online leaderboard |
-| T10 | GPQA / Δ | Post-online | **Pending** | Accuracy Gate |
-
-**Important:** local `ERS_hat` is a **ranking signal only**. Official ERS is computed by BTC from real TTFT / TPOT_mean on the MiG slice.
+| ID | Check | Env | Result |
+|---|---|---|---|
+| T1 | `scripts/preflight.sh` | Mac | PASS |
+| T2 | Mock OpenAI smoke | CPU | PASS |
+| T3 | `ers_sim.py` + BTC meta | Local ranking only | PASS (not official) |
+| T4–T6 | Download / amd64 build / Hub public | Local + Hub | PASS |
+| T7 | Compose vs BTC locked fields | Review | PASS (entrypoint + model/host/port) |
+| T8 | Live MiG serve | BTC | **PASS** (P0) |
+| T9 | Official ERS P0 | Portal | **49.81** |
+| T10 | Official ERS S1S2 | Portal | **Pending** |
+| T11 | GPQA / Δ | Post-online | Pending |
 
 ---
 
-## 8. How to reproduce / ship
+## 10. Reproduce / ship
 
 ```bash
-# Build (needs Docker + downloaded weights)
 make download-model
 make build IMAGE_REPO=longquanton/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.23.0
+docker login && docker push longquanton/develarper-lfm25:p0
 
-# Push
-docker login
-docker push longquanton/develarper-lfm25:p0
-./scripts/set_image.sh longquanton/develarper-lfm25:p0
-
-# Portal: upload docker-compose.yml (Docker Compose file)
+# Portal: upload root docker-compose.yml (current = S1S2)
+# Limits: ≤5 submits/day · ≥600s between submits
 ```
 
-Ablation order (1 change per submit, 5/day, 600s gap): see [`submit/README.md`](submit/README.md) and [`eval/ablation_sheet.md`](eval/ablation_sheet.md).
-
-More ops detail: [SUBMIT.md](SUBMIT.md)
+New image tags only when flags need bake (`p1`+). Ablation sheet: [`eval/ablation_sheet.md`](eval/ablation_sheet.md).
 
 ---
 
-## 9. Repository layout
+## 11. Repository layout
 
 ```text
-Dockerfile                     # bake /model on vLLM ≥0.23
-docker-compose.yml      # Portal P0 compose
-docker-compose.yml             # local mock/gpu profiles
-Makefile
-configs/                       # ERS params + P0/P1 env sketches
-scripts/                       # download, preflight, smoke, ers_sim, set_image
-submit/                        # ablation composes
-eval/traces/                   # BTC workload meta + examples
-model_weights/                 # local only (gitignored)
-CONTEXT.md  PLAN.md  PROBLEM*.md  SUBMIT.md
+Dockerfile
+docker-compose.yml              # Portal current = S1S2
+submit/
+  docker-compose.p0_baseline.yml
+  docker-compose.s1s2_oneshot.yml
+  docker-compose.a*.yml / b*.yml
+eval/ablation_sheet.md
+eval/traces/btc_workload_meta.json
+scripts/  configs/  Makefile
+CONTEXT.md  PLAN.md  SUBMIT.md  PROBLEM*.md
+model_weights/                  # gitignored
 ```
 
 ---
 
-## 10. Team & compliance
+## 12. Compliance (anti-cheat)
 
-- **Team:** Develarper (2× AI + 1× DevOps)
-- **Anti-cheat:** offline runtime (no outbound fetch at serve), single behavior path, no pre-bake / dual-path
-- **Hub image (P0):** https://hub.docker.com/r/longquanton/develarper-lfm25  
-- **Tag:** `p0`
+| Rule | Our stance |
+|---|---|
+| Honest GPU serving | Real vLLM decode on BTC MiG |
+| No pre-bake / dual-path | Single OpenAI path |
+| No outbound network at runtime | Weights in `/model` |
+| No illicit tokenizer/weight tampering | Stock Instruct checkpoint |
+| No image swap after submit | Keep `p0` immutable; new work → new tags |
+| Locked compose fields | Entrypoint + `--model` / served name / host / port unchanged |
+
+Tuning `max-model-len`, chunked prefill, batched-tokens = allowed engine optimization (same class as sample prefix/mem flags).
 
 ---
 
-## 11. Status snapshot
+## 13. Status snapshot
 
 | Item | Status |
 |---|---|
-| Code + docs + compose | Ready |
-| Public Hub image amd64 | Ready (`longquanton/develarper-lfm25:p0`) |
-| Portal compose file | Ready (`docker-compose.yml`) |
-| Official ERS / GPQA | After BTC evaluation |
+| Hub image `p0` (BF16, amd64, public) | Ready · **do not overwrite** |
+| P0 official Score | **49.81** |
+| Portal compose S1S2 | Ready · metrics **pending** |
+| Next ablations (FP8 / `-O3` / …) | After S1S2 readout + new daily quota |
+| Accuracy Gate shortlist | Keep P0 BF16 (+ best ERS if Δ-safe) |
 
-*Last updated: 2026-07-21 · Phase 1 submission package*
+*Last updated: 2026-07-21 · after P0 score + S1S2 one-shot ship*
