@@ -2,10 +2,11 @@
 
 | File | Role |
 |---|---|
-| ../docker-compose.yml | **X1 Decode-Max** — nộp tiếp theo |
-| docker-compose.x1_decode_max.yml | Archive copy of X1 |
-| docker-compose.p0_baseline.yml | Champion 49.81 |
-| docker-compose.s1s2_oneshot.yml | Failed 48.45 — do not resubmit |
-| docker-compose.b1_fp8.yml | = future **X2** if X1 not enough |
+| ../docker-compose.yml | **P0 hotfix** — nộp ngay (sau X1 fail) |
+| docker-compose.p0_baseline.yml | Same P0 |
+| docker-compose.x1_decode_max.yml | **FAILED probe — do not resubmit** |
+| docker-compose.x1b_o3_only.yml | Later: only `-O3` |
+| docker-compose.b1_fp8.yml | Later X2 |
+| docker-compose.s1s2_oneshot.yml | Failed ERS 48.45 |
 
-See [PLAN.md](../PLAN.md) § ★ X1.
+See PLAN.md ★ HOTFIX.

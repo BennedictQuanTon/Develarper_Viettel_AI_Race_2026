@@ -4,99 +4,45 @@
 > Chiến lược nền: [CONTEXT.md](CONTEXT.md) · Đề: [PROBLEM_VN.md](PROBLEM_VN.md) · Nộp: [SUBMIT.md](SUBMIT.md)  
 > **Model:** `LiquidAI/LFM2.5-1.2B-Instruct` · **Slice:** MiG H200 **18GB** · **Engine:** **vLLM only**  
 > **Image baseline:** `longquanton/develarper-lfm25:p0` (vLLM **0.23.0**, weights bake `/model`)  
-> **Deadline Phase 1:** 30/07/2026 · Cập nhật: **2026-07-21 đêm** — gói **X1 Decode-Max** (thay B1 nhỏ lẻ)
+> **Deadline Phase 1:** 30/07/2026 · Cập nhật: **2026-07-21 23:31** — X1 **FAIL probe** → rollback P0
 
 ---
 
-## ★ X1 DECODE-MAX — lần nộp “lớn” tiếp theo (Δ-safe + ERS)
-
-### Plan cũ (B1 chỉ +FP8) đổi thành gì?
-
-| Trước (sau S1S2) | **Nay (X1)** |
-|---|---|
-| +1 flag `--quantization=fp8` | **Gói 3 đòn bẩy compute/latency**, **không** quant weights |
-| Rủi ro Δ GPQA nếu FP8 | **Giữ BF16** → f(Δ) / Accuracy Gate thân thiện |
-| Lặp kiểu “lí nhí” | Một submit **đổi lớp** so với P0 & S1S2 |
-
-### Vì sao không lặp S1S2 / không FP8 ngay?
-
-- S1S2 chứng minh: `maxlen` + `bt=2048` **không** hạ TBT (vẫn 6ms), còn làm Score↓.
-- FP8 có thể ↑ERS nhưng **đốt Δ** — bạn muốn ERS cao **và** delta còn tốt cho hậu kiểm → để FP8 là **X2** chỉ khi X1 chưa đủ.
-
-### Gói X1 (cùng image `p0`, không rebuild)
-
-| Thành phần | Flag (đã có trên vLLM **0.23**) | Tác dụng | Δ / anti-cheat |
-|---|---|---|---|
-| Prefill reuse | `--enable-prefix-caching` (giữ P0) | Shared 1000-tok prefix | Trung thực |
-| Compile aggress | `--optimization-level=3` | Recipe LFM2.5 ~+steady decode | Cùng weights → Δ≈0 |
-| Latency mode | `--performance-mode=interactivity` | CUDA graph/kernel thiên **latency / ITL** (đánh TBT) | Δ≈0 |
-| Spec decode | `--speculative-config` **ngram** (5 tok, lookup 4) | Nhiều token/verify bước; **target model verify** → phân phối giữ | Hợp lệ vLLM; không draft lạ, không đổi `/model` |
-| **Cố ý bỏ** | maxlen↓, bt=2048, FP8, `--disable-log-requests` | Đã fail / sai tên / rủi ro Δ | — |
-
-**File nộp:** root [`docker-compose.yml`](docker-compose.yml) = [`submit/docker-compose.x1_decode_max.yml`](submit/docker-compose.x1_decode_max.yml)
-
-**Locked BTC (không đụng):** entrypoint `python3 -m vllm.entrypoints.openai.api_server` · `--model=/model` · served-name · host/port · image public `p0` · không mạng runtime · không dual-path.
-
-### Kỳ vọng số (không cam kết)
-
-| | P0 | X1 mục tiêu |
-|---|---|---|
-| tbt_median | 6 ms | **≤4 ms** (ngram + interactivity + O3) |
-| Score | 49.81 | **≥55** nếu TBT về ~4; stretch **≥60** nếu ~3 |
-| fail | 7 | ≤7 (ngram không kỳ vọng sửa fail systematic) |
-| f_delta online | 1 | 1; GPQA sau vẫn ưu tiên BF16 path |
-
-### Rủi ro X1 & xử lý
-
-| Rủi ro | Mitigate |
-|---|---|
-| Startup lâu vì `-O3` → healthcheck fail | Nếu exit sớm: nộp lại bản **X1b** bỏ `-O3`, giữ ngram+interactivity |
-| Ngram acceptance thấp dưới tải → Score≤P0 | Rollback P0; thử **X2** = P0+FP8 (đổi Δ) hoặc suffix speculative |
-| JSON speculative parse lỗi Portal | Fallback `X1c`: `--spec-method=ngram` + `--spec-tokens=5` |
-
-### Bạn làm gì để nộp X1
-
-1. Còn quota ngày / ≥600s từ S1S2.  
-2. Upload **root `docker-compose.yml`** (đã = X1). Không push image.  
-3. Gửi Score, fail, ttft_p50/p95, tbt → cập nhật ablation.  
-4. Shortlist cuối: luôn giữ **P0** (+ X1 nếu thắng và Δ ổn).
-
----
-
-## ★ Ngân sách eval còn lại (ước lượng)
-
-| Constraint BTC | Số |
-|---|---|
-| Max / ngày | **5** |
-| Gap | **≥600s** |
-| Deadline Phase 1 | **30/07/2026** (~9 ngày từ 21/07) |
-| Trần lý thuyết | 9×5 ≈ **45** |
-| Thực tế nên dùng | **~10–15** submit có ý nghĩa (mỗi lần 1 giả thuyết rõ) |
-| Đã có điểm | P0 49.81 · S1S2 48.45 (**2**) |
-| Shortlist GPQA | chọn **≤5** bài cuối (P0 bắt buộc trong đó) |
-
-**Lịch đề xuất (không đốt 5/ngày vô ích):**
+## ★ HOTFIX — X1 bị BTC abort (22:59)
 
 ```text
-Ngày A:  X1 Decode-Max          ← bạn sắp nộp
-Ngày B:  nhánh theo X1 (1 shot)
-         · thắng → X1-tune (ngram 3 hoặc 7) HOẶC giữ + thử X2 FP8 riêng
-         · thua  → X1b (bỏ O3) hoặc X2 FP8
-Ngày C–E: tối đa 1–2/ngày tinh chỉnh winner
-Cuối kỳ: freeze ≤5 (P0 + best ERS Δ-safe + …)
+protocol aborted: long-context probe failed (0%) - truncation / dual-path likely
 ```
 
-→ Khoảng **6–10 eval nữa** là đủ bao phủ hướng lớn; không cần 45.
+| | Chi tiết |
+|---|---|
+| Nộp | X1 Decode-Max (O3 + interactivity + **ngram speculative**) |
+| Kết quả | **Thất bại** — không có ERS (protocol abort trước/bench) |
+| Nghiêm trọng | BTC gắn nhãn truncation / dual-path — **cấm nộp lại X1** |
+| Nguyên nhân khả dĩ #1 | `--speculative-config` ngram làm long-context probe trả lời lệch/cắt |
+| #2 | `-O3` / `interactivity` làm startup hoặc hành vi probe không ổn |
+| **Fix ngay** | Root compose = **P0 thuần** (đã chấm 49.81, maxlen **32768**) |
+
+**Không phải** lỗi filename / image pull kiểu cũ. Probe long-context của BTC **bắt buộc** hành vi serving “thẳng”; speculative dễ bị coi bất thường.
+
+### Bạn nộp gì bây giờ
+
+1. Upload root [`docker-compose.yml`](docker-compose.yml) = **P0** (đã rollback).  
+2. ≥600s từ lần X1 fail · còn quota.  
+3. **Không** thêm speculative / interactivity cho đến khi có plan riêng đã cô lập.  
+4. Sau này nếu muốn thử lại: chỉ [`submit/docker-compose.x1b_o3_only.yml`](submit/docker-compose.x1b_o3_only.yml) (**chỉ** `-O3`, không ngram).
+
+Archive X1 fail: `submit/docker-compose.x1_decode_max.yml`
 
 ---
 
-## ★ ARCHIVE nhanh
+## ★ X1 DECODE-MAX — HUỶ cho Portal (giữ lesson)
 
-| ID | Score | Lesson |
-|---|---|---|
-| P0 | **49.81** | Champion BF16 · GPQA |
-| S1S2 | 48.45 | maxlen+bt **không** hạ TBT — cấm lặp |
-| B1 FP8 đơn | (hoãn) | Thành **X2** sau X1 nếu cần ERS thêm và chấp nhận rủi ro Δ |
+Gói O3+interactivity+ngram **không dùng lại** trên Portal sau lỗi probe. FP8 / -O3 đơn lẻ vẫn có thể thử **sau** khi P0 ổn định lại trên leaderboard mindset.
+
+### Ngân sách eval (nhắc)
+
+~5/ngày · ~6–10 shot ý nghĩa còn lại · **P0 luôn trong shortlist GPQA**.
 
 ---
 
@@ -105,9 +51,9 @@ Cuối kỳ: freeze ≤5 (P0 + best ERS Δ-safe + …)
 | | |
 |---|---|
 | Champion | **P0 = 49.81** |
-| Next | **X1 Decode-Max** (O3 + interactivity + ngram, BF16) |
-| Triết lý | Sáng tạo trong biên vLLM; **ERS↑ không đánh đổi Δ** ở shot này |
-| Cấm | S1S2-style · disable-log-requests · engine khác · tráo image `p0` |
+| X1 | **FAIL protocol** — bỏ speculative khỏi chiến lược gần |
+| Next submit | **P0 thuần** (hotfix) rồi mới X1b (`-O3` only) hoặc X2 FP8 |
+| Cấm | ngram speculative trên Portal cho đến khi hiểu rõ probe BTC |
 
 ---
 
@@ -269,10 +215,11 @@ flowchart TD
 | # | ID | Nội dung | Mục tiêu |
 |---|---|---|---|
 | ✓ | P0 | BF16 baseline | Champion **49.81** |
-| ✓ | S1S2 | maxlen+bt | Fail — không lặp |
-| **1** | **X1** | O3 + interactivity + ngram BF16 | **Nộp lớn tiếp theo** |
-| 2 | X1b/X1c | fallback nếu boot/JSON | Theo PLAN ★ X1 |
-| 3 | X2 | FP8 trên P0 | Chỉ nếu cần ERS thêm (rủi ro Δ) |
+| ✓ | S1S2 | maxlen+bt | Fail ERS |
+| ✓ | X1 | ngram+O3+interactivity | **FAIL probe — cấm** |
+| **0** | **P0 hotfix** | compose thuần P0 | **Nộp ngay** |
+| 1 | X1b | chỉ `-O3` | sau hotfix |
+| 2 | X2 | FP8 | rủi ro Δ |
 
 **Winner rule:** ERS↑ **và** failed_count không tăng → giữ; ngược lại rollback.  
 **Accuracy:** luôn giữ **≥1** submission BF16 (P0 hoặc best BF16) trong shortlist GPQA.

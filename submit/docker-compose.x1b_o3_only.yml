@@ -1,7 +1,6 @@
-# Portal — FIX after X1 fail (2026-07-21 22:59)
-# Error: protocol aborted: long-context probe failed (0%) - truncation / dual-path likely
-# Cause: X1 extras (esp. ngram speculative / -O3 / interactivity) — NOT used here.
-# This = proven P0 champion (Score 49.81). max-model-len MUST stay 32768 for BTC long-context probe.
+# X1b — safer follow-up AFTER P0 re-confirm (optional later)
+# Only -O3, NO speculative, NO interactivity, maxlen 32768
+# Do not submit until P0 recovery submit succeeds if needed.
 
 services:
   model:
@@ -19,6 +18,7 @@ services:
       - --gpu-memory-utilization=0.95
       - --tensor-parallel-size=1
       - --enable-prefix-caching
+      - --optimization-level=3
     ports:
       - "8000:8000"
     shm_size: "2g"
