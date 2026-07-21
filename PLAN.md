@@ -66,7 +66,7 @@ Daily 15’: portal / ERS mới / OOM? / submit gì hôm nay?
 ```text
 Dockerfile                 # bake LiquidAI/LFM2.5-1.2B-Instruct -> /model
 docker-compose.yml         # BTC entrypoint form + mock profile
-docker-compose.submit.yml  # bản nộp Portal (image Hub của đội)
+docker-compose.yml  # bản nộp Portal (image Hub của đội)
 configs/p0_safe.env        # flags P0
 configs/p1_aggressive.env
 configs/ers_params.example.json
@@ -196,7 +196,7 @@ make download-model
 make build IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
 ./scripts/set_image.sh <you>/develarper-lfm25:p0
 make push IMAGE_REPO=<you>/develarper-lfm25 TAG=p0
-# Portal: upload docker-compose.submit.yml
+# Portal: upload docker-compose.yml
 ```
 
 Chi tiết: **[SUBMIT.md](SUBMIT.md)**.

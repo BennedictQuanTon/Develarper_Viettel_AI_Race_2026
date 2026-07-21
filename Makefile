@@ -54,11 +54,11 @@ push:
 	docker push $(IMAGE_REPO):$(TAG)
 	@echo "Pinned digest:"
 	@docker image inspect $(IMAGE_REPO):$(TAG) --format '{{index .RepoDigests 0}}' || true
-	@echo "Update docker-compose.submit.yml image: field, then upload to portal."
+	@echo "Update docker-compose.yml image: field, then upload to portal."
 
 submit-p0-compose:
-	@cp docker-compose.submit.yml /tmp/docker-compose.yml
-	@echo "Wrote /tmp/docker-compose.yml — edit image then upload to portal"
+	@cp docker-compose.yml /tmp/docker-compose.yml
+	@echo "Copied docker-compose.yml to /tmp — upload that file to portal"
 
 tag-digest:
 	docker image inspect $(IMAGE_REPO):$(TAG) --format '{{index .RepoDigests 0}}'

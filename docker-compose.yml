@@ -1,12 +1,5 @@
-# =============================================================================
-# PORTAL SUBMIT FILE — copy/rename to docker-compose.yml when uploading
-# =============================================================================
-# Before submit:
-#   1) make download-model && make build && make push IMAGE_REPO=<you>/develarper-lfm25
-#   2) set image: below to that public tag (prefer digest pin)
-#   3) keep entrypoint exactly as BTC sample (python3 -m vllm.entrypoints.openai.api_server)
-#
-# Default image base: CUDA13 vLLM (LFM2.5 needs >=0.23). Do NOT use v0.22.1 unless verified.
+# Portal submission file — filename MUST be docker-compose.yml when uploading.
+# Image: longquanton/develarper-lfm25:p0 (public, linux/amd64)
 
 services:
   model:

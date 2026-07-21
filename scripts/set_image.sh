@@ -10,7 +10,7 @@ if [[ -z "${IMAGE}" ]]; then
 fi
 
 files=(
-  "${ROOT}/docker-compose.submit.yml"
+  "${ROOT}/docker-compose.yml"
   "${ROOT}/submit/docker-compose.a1_mem90.yml"
   "${ROOT}/submit/docker-compose.a2_chunked.yml"
   "${ROOT}/submit/docker-compose.b1_fp8.yml"
@@ -35,4 +35,4 @@ print("updated", p)
 PY
 done
 
-echo "Done. Upload docker-compose.submit.yml (as docker-compose.yml) for P0."
+echo "Done. Upload docker-compose.yml to Portal for P0."

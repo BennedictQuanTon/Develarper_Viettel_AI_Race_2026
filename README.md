@@ -39,7 +39,7 @@ Full brief: [PROBLEM_VN.md](PROBLEM_VN.md) · [PROBLEM.md](PROBLEM.md)
 | Deliverable | Detail |
 |---|---|
 | Competition image | `longquanton/develarper-lfm25:p0` (public Hub, **linux/amd64**) |
-| Compose for Portal | [`docker-compose.submit.yml`](docker-compose.submit.yml) |
+| Compose for Portal | [`docker-compose.yml`](docker-compose.yml) |
 | Ablation variants | [`submit/`](submit/) — mem90 / chunked / fp8 / kv-fp8 |
 | Weights bake | Model copied to `/model` at image build (runtime **offline**) |
 | Local tooling | download, preflight, smoke, ERS simulator, set_image |
@@ -150,7 +150,7 @@ docker login
 docker push longquanton/develarper-lfm25:p0
 ./scripts/set_image.sh longquanton/develarper-lfm25:p0
 
-# Portal: upload docker-compose.submit.yml (Docker Compose file)
+# Portal: upload docker-compose.yml (Docker Compose file)
 ```
 
 Ablation order (1 change per submit, 5/day, 600s gap): see [`submit/README.md`](submit/README.md) and [`eval/ablation_sheet.md`](eval/ablation_sheet.md).
@@ -163,7 +163,7 @@ More ops detail: [SUBMIT.md](SUBMIT.md)
 
 ```text
 Dockerfile                     # bake /model on vLLM ≥0.23
-docker-compose.submit.yml      # Portal P0 compose
+docker-compose.yml      # Portal P0 compose
 docker-compose.yml             # local mock/gpu profiles
 Makefile
 configs/                       # ERS params + P0/P1 env sketches
@@ -191,7 +191,7 @@ CONTEXT.md  PLAN.md  PROBLEM*.md  SUBMIT.md
 |---|---|
 | Code + docs + compose | Ready |
 | Public Hub image amd64 | Ready (`longquanton/develarper-lfm25:p0`) |
-| Portal compose file | Ready (`docker-compose.submit.yml`) |
+| Portal compose file | Ready (`docker-compose.yml`) |
 | Official ERS / GPQA | After BTC evaluation |
 
 *Last updated: 2026-07-21 · Phase 1 submission package*

@@ -3,7 +3,7 @@
 ## Bạn nộp gì?
 
 1. **Docker image public** trên Docker Hub (weights đã bake tại `/model`, runtime offline)
-2. File **`docker-compose.yml`** trên Portal (dùng [`docker-compose.submit.yml`](docker-compose.submit.yml))
+2. File **`docker-compose.yml`** trên Portal (dùng [`docker-compose.yml`](docker-compose.yml))
 
 BTC pull image → chạy trên **MiG H200 18GB** → healthcheck → chấm **ERS**.
 
@@ -27,7 +27,7 @@ make preflight   # sẽ FAIL nếu vẫn còn YOUR_DOCKERHUB trong compose — �
 # 4) Push public
 make push IMAGE_REPO=<username>/develarper-lfm25 TAG=p0
 
-# 5) Sửa docker-compose.submit.yml:
+# 5) Sửa docker-compose.yml:
 #    image: <username>/develarper-lfm25:p0
 #    (tốt hơn: pin digest sha256:... từ make push)
 
@@ -44,7 +44,7 @@ Nếu BTC bắt buộc đúng tag 0.22.1: thử `make build-baseline` và verify
 
 | Thứ tự | File | Thay đổi |
 |---|---|---|
-| P0 | `docker-compose.submit.yml` | prefix ON, mem=0.95 |
+| P0 | `docker-compose.yml` | prefix ON, mem=0.95 |
 | A1 | `submit/docker-compose.a1_mem90.yml` | mem=0.90 |
 | A2 | `submit/docker-compose.a2_chunked.yml` | chunked prefill |
 | B1 | `submit/docker-compose.b1_fp8.yml` | `--quantization=fp8` |

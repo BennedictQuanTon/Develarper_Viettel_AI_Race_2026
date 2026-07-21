@@ -18,20 +18,20 @@ else
 fi
 
 # Compose submit form
-if grep -q "vllm.entrypoints.openai.api_server" docker-compose.submit.yml \
-  && grep -q "python3" docker-compose.submit.yml; then
+if grep -q "vllm.entrypoints.openai.api_server" docker-compose.yml \
+  && grep -q "python3" docker-compose.yml; then
   ok "submit compose uses BTC entrypoint form"
 else
-  bad "docker-compose.submit.yml entrypoint form incorrect"
+  bad "docker-compose.yml entrypoint form incorrect"
 fi
 
-if grep -q "enable-prefix-caching" docker-compose.submit.yml; then
+if grep -q "enable-prefix-caching" docker-compose.yml; then
   ok "prefix caching enabled in submit compose"
 else
   bad "prefix caching missing"
 fi
 
-if grep -q "YOUR_DOCKERHUB" docker-compose.submit.yml; then
+if grep -q "YOUR_DOCKERHUB" docker-compose.yml; then
   echo " WARN replace YOUR_DOCKERHUB/... via: ./scripts/set_image.sh <you>/develarper-lfm25:p0"
 else
   ok "submit compose image tag looks customized"
