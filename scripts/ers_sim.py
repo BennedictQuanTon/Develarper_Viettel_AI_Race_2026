@@ -102,9 +102,31 @@ def load_trace_jsonl(path: Path) -> list[Turn]:
     return turns
 
 
-def expand_meta(meta: dict, seed: int = 0) -> list[Turn]:
+def parse_arrival(arrival, default_seed: int = 0) -> tuple[str, float, float, float, int]:
+    """Return mode, rate_per_s, start_gap_s, think_s, seed."""
+    if isinstance(arrival, dict):
+        mode = str(arrival.get("mode", "poisson")).lower()
+        rate = float(arrival.get("rate_per_s", 2.0))
+        start_gap = float(arrival.get("conversation_start_gap_s", 0.05))
+        think = float(arrival.get("think_time_s", 0.5))
+        seed = int(arrival.get("seed", default_seed))
+        return mode, rate, start_gap, think, seed
+
+    # BTC style: "Poisson, seed 42"
+    text = str(arrival or "poisson").lower()
+    mode = "poisson" if "poisson" in text else "poisson"
+    seed = default_seed
+    import re
+
+    m = re.search(r"seed\s*[:=]?\s*(\d+)", text)
+    if m:
+        seed = int(m.group(1))
+    # Rate not published by BTC — use a moderate default for ranking only
+    return mode, 2.0, 0.05, 0.5, seed
+
+
+def expand_meta(meta: dict, seed: int | None = None) -> list[Turn]:
     """Expand official meta fields into per-turn synthetic arrivals."""
-    rng = random.Random(seed)
     n_conv = int(meta["num_conversations"])
     turns_per = int(meta["user_turns_per_conversation"])
     shared = int(meta.get("shared_system_prefix_tokens", 0))
@@ -112,6 +134,9 @@ def expand_meta(meta: dict, seed: int = 0) -> list[Turn]:
     new_user = meta.get("new_user_tokens_per_turn", 128)
     out_tok = meta.get("output_tokens_per_turn_pinned", 128)
     arrival = meta.get("arrival", {})
+
+    mode, rate, start_gap, think, parsed_seed = parse_arrival(arrival, default_seed=0)
+    rng = random.Random(parsed_seed if seed is None else seed)
 
     if isinstance(new_user, list):
         user_list = [int(x) for x in new_user]
@@ -123,10 +148,11 @@ def expand_meta(meta: dict, seed: int = 0) -> list[Turn]:
     else:
         out_list = [int(out_tok)] * turns_per
 
-    mode = str(arrival.get("mode", "poisson") if isinstance(arrival, dict) else "poisson")
-    rate = float(arrival.get("rate_per_s", 2.0) if isinstance(arrival, dict) else 2.0)
-    start_gap = float(arrival.get("conversation_start_gap_s", 0.05) if isinstance(arrival, dict) else 0.05)
-    think = float(arrival.get("think_time_s", 0.5) if isinstance(arrival, dict) else 0.5)
+    expected = meta.get("total_requests", meta.get("total_request"))
+    if expected is not None and int(expected) != n_conv * turns_per:
+        print(
+            f"[warn] total_requests={expected} != num_conversations*turns ({n_conv * turns_per})"
+        )
 
     turns: list[Turn] = []
     t = 0.0
@@ -138,9 +164,10 @@ def expand_meta(meta: dict, seed: int = 0) -> list[Turn]:
             if turn == 0:
                 isl = shared + per_conv + user_new
             else:
-                isl = hist + user_new  # full history resent (typical chat API)
+                # Growing context: prior tokens + new user turn (chat-style)
+                isl = hist + user_new
             osl = out_list[min(turn, len(out_list) - 1)]
-            if mode == "poisson" and turn == 0 and c > 0:
+            if mode.startswith("poisson") and turn == 0 and c > 0:
                 conv_t += rng.expovariate(max(rate, 1e-6))
             turns.append(
                 Turn(

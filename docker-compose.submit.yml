@@ -10,7 +10,7 @@
 
 services:
   model:
-    image: YOUR_DOCKERHUB/develarper-lfm25:p0
+    image: longquanton/develarper-lfm25:p0
     entrypoint:
       - python3
       - -m

@@ -1,7 +1,7 @@
 # Ablation B1 — online FP8 quantization (P1 only after P0 has ERS)
 services:
   model:
-    image: YOUR_DOCKERHUB/develarper-lfm25:p0
+    image: longquanton/develarper-lfm25:p0
     entrypoint:
       - python3
       - -m

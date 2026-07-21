@@ -4,7 +4,7 @@
 IMAGE_REPO ?= YOUR_DOCKERHUB/develarper-lfm25
 TAG        ?= p0
 PLATFORM   ?= linux/amd64
-VLLM_IMAGE ?= vllm/vllm-openai:latest-cu130
+VLLM_IMAGE ?= vllm/vllm-openai:v0.23.0
 
 .PHONY: help download-model preflight build build-baseline push tag-digest ers-sim smoke-mock submit-p0-compose
 
