@@ -1,12 +1,12 @@
-# Submit variants
+# Submit variants — Wave 2
 
 | File | Role |
 |---|---|
-| ../docker-compose.yml | **P0 hotfix** — nộp ngay (sau X1 fail) |
-| docker-compose.p0_baseline.yml | Same P0 |
-| docker-compose.x1_decode_max.yml | **FAILED probe — do not resubmit** |
-| docker-compose.x1b_o3_only.yml | Later: only `-O3` |
-| docker-compose.b1_fp8.yml | Later X2 |
-| docker-compose.s1s2_oneshot.yml | Failed ERS 48.45 |
+| ../docker-compose.yml | **Y1** — nộp tiếp (throughput stack) |
+| docker-compose.y1_throughput.yml | Archive Y1 |
+| docker-compose.y2_mamba_fi.yml | Next after Y1 |
+| docker-compose.y4_kvfp8.yml / y5_fp8.yml | Quant path |
+| docker-compose.p0_baseline.yml | Champion 49.81 |
+| docker-compose.x1_decode_max.yml | FAIL — do not resubmit |
 
-See PLAN.md ★ HOTFIX.
+`Dockerfile.p1` = fastokens image when ready. See [PLAN.md](../PLAN.md).

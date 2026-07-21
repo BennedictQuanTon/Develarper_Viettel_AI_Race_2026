@@ -1,0 +1,16 @@
+# p1 image — same Instruct weights + fastokens (Liquid LFM2.5 recipe)
+# Build: docker buildx build -f Dockerfile.p1 --platform linux/amd64 -t longquanton/develarper-lfm25:p1 --load .
+# Do NOT overwrite :p0
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.23.0
+FROM ${VLLM_IMAGE}
+
+RUN pip install --no-cache-dir fastokens \
+    && python3 -c "import fastokens; print('fastokens ok')"
+
+ENV VLLM_USE_FASTOKENS=1
+
+COPY model_weights/LFM2.5-1.2B-Instruct /model
+RUN test -f /model/config.json && ls -lah /model | head
+
+EXPOSE 8000

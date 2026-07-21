@@ -1,9 +1,5 @@
-# E1+ — FP8 weights + KV-FP8 (quant family only; probe-safe)
-# Evidence: scheduler/bt did not move TBT → need compute/memory quant (đề cho phép cả hai).
-# NOT included: speculative (X1 fail), maxlen↓ / bt=2048 (S1S2), interactivity.
-# Optional weak add: -O3 (compile, Δ≈0). Skipped here to keep diff = quant only vs P0.
-# GPQA: keep P0 BF16 in shortlist — FP8 may move Δ.
-# Image: longquanton/develarper-lfm25:p0
+# Y2 — Y1 + LFM2-native mamba SSU backend (flashinfer)
+# Submit only after Y1 has a score. If boot fail → rollback Y1.
 
 services:
   model:
@@ -21,8 +17,10 @@ services:
       - --gpu-memory-utilization=0.95
       - --tensor-parallel-size=1
       - --enable-prefix-caching
-      - --quantization=fp8
-      - --kv-cache-dtype=fp8
+      - --optimization-level=3
+      - --performance-mode=throughput
+      - --max-num-batched-tokens=16384
+      - --mamba-backend=flashinfer
     ports:
       - "8000:8000"
     shm_size: "2g"

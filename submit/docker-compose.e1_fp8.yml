@@ -1,9 +1,4 @@
-# E1+ — FP8 weights + KV-FP8 (quant family only; probe-safe)
-# Evidence: scheduler/bt did not move TBT → need compute/memory quant (đề cho phép cả hai).
-# NOT included: speculative (X1 fail), maxlen↓ / bt=2048 (S1S2), interactivity.
-# Optional weak add: -O3 (compile, Δ≈0). Skipped here to keep diff = quant only vs P0.
-# GPQA: keep P0 BF16 in shortlist — FP8 may move Δ.
-# Image: longquanton/develarper-lfm25:p0
+# Archive copy of E1+ (root docker-compose.yml)
 
 services:
   model:
