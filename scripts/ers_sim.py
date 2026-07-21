@@ -1,38 +1,37 @@
 #!/usr/bin/env python3
-"""ERS simulator from a redacted (or synthetic) multi-turn trace.
+"""ERS simulator for Viettel Challenge 3 (official params + trace schema).
 
-Does NOT predict absolute H200 ERS. Use it to rank config hypotheses cheaply.
+Supports:
+  1) Meta JSON describing the official workload fields
+  2) JSONL turn-level redacted traces
+  3) --synthetic using the same field names as the problem statement
 
-Trace JSONL fields (flexible):
-  arrival_s, conversation_id, turn_id, input_tokens, output_tokens
-
-Scoring params (override via CLI / JSON) match PROBLEM.md:
-  Score_request = w * s_ttft + (1-w) * s_tpot
-  s = clamp((C - L) / (C - F), 0, 1) ** gamma
+Official ERS params (seconds):
+  F_ttft=0.010 C_ttft=0.400 F_tpot=0.001 C_tpot=0.010 gamma=2 w=0.5
 
 Usage:
   python scripts/ers_sim.py --synthetic
-  python scripts/ers_sim.py --trace path/to/trace.jsonl --params configs/ers_params.example.json
+  python scripts/ers_sim.py --meta eval/traces/example_meta.json
+  python scripts/ers_sim.py --trace eval/traces/example_turns.jsonl
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import random
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 
 @dataclass
 class Params:
-    f_ttft: float = 0.1
-    c_ttft: float = 2.0
-    f_tpot: float = 0.02
-    c_tpot: float = 0.15
+    f_ttft: float = 0.010
+    c_ttft: float = 0.400
+    f_tpot: float = 0.001
+    c_tpot: float = 0.010
     w: float = 0.5
-    gamma: float = 1.0
+    gamma: float = 2.0
 
 
 @dataclass
@@ -42,6 +41,19 @@ class Turn:
     turn_id: int
     input_tokens: int
     output_tokens: int
+    shared_prefix_tokens: int = 0
+    per_conv_prefix_tokens: int = 0
+
+
+@dataclass
+class ServerModel:
+    prefill_ms_per_token: float = 0.04
+    decode_ms_per_token: float = 8.0  # target under 10ms TPOT ceiling
+    prefix_cache: bool = True
+    chunked: bool = True
+    capacity: float = 1.0
+    shared_prefix_hit: float = 0.95  # shared system prefix reuse across convs
+    history_hit: float = 0.70  # multi-turn history reuse
 
 
 def clamp(x: float, lo: float, hi: float) -> float:
@@ -61,12 +73,12 @@ def load_params(path: Path | None) -> Params:
         return p
     data = json.loads(path.read_text())
     for k, v in data.items():
-        if hasattr(p, k):
+        if hasattr(p, k) and k != "notes":
             setattr(p, k, float(v))
     return p
 
 
-def load_trace(path: Path) -> list[Turn]:
+def load_trace_jsonl(path: Path) -> list[Turn]:
     turns: list[Turn] = []
     with path.open() as f:
         for line in f:
@@ -80,68 +92,155 @@ def load_trace(path: Path) -> list[Turn]:
                     conversation_id=str(row.get("conversation_id", row.get("conv_id", "c0"))),
                     turn_id=int(row.get("turn_id", row.get("turn", 0))),
                     input_tokens=int(row.get("input_tokens", row.get("isl", 0))),
-                    output_tokens=int(row.get("output_tokens", row.get("osl", 0))),
+                    output_tokens=int(
+                        row.get("output_tokens", row.get("osl", row.get("output_tokens_per_turn_pinned", 0)))
+                    ),
+                    shared_prefix_tokens=int(row.get("shared_system_prefix_tokens", 0)),
+                    per_conv_prefix_tokens=int(row.get("per_conversation_prefix_tokens", 0)),
                 )
             )
     return turns
 
 
-def synthetic_trace(n_conv: int = 20, turns_per: int = 3, seed: int = 0) -> list[Turn]:
-    rng = random.Random(seed)
+def parse_arrival(arrival, default_seed: int = 0) -> tuple[str, float, float, float, int]:
+    """Return mode, rate_per_s, start_gap_s, think_s, seed."""
+    if isinstance(arrival, dict):
+        mode = str(arrival.get("mode", "poisson")).lower()
+        rate = float(arrival.get("rate_per_s", 2.0))
+        start_gap = float(arrival.get("conversation_start_gap_s", 0.05))
+        think = float(arrival.get("think_time_s", 0.5))
+        seed = int(arrival.get("seed", default_seed))
+        return mode, rate, start_gap, think, seed
+
+    # BTC style: "Poisson, seed 42"
+    text = str(arrival or "poisson").lower()
+    mode = "poisson" if "poisson" in text else "poisson"
+    seed = default_seed
+    import re
+
+    m = re.search(r"seed\s*[:=]?\s*(\d+)", text)
+    if m:
+        seed = int(m.group(1))
+    # Rate not published by BTC — use a moderate default for ranking only
+    return mode, 2.0, 0.05, 0.5, seed
+
+
+def expand_meta(meta: dict, seed: int | None = None) -> list[Turn]:
+    """Expand official meta fields into per-turn synthetic arrivals."""
+    n_conv = int(meta["num_conversations"])
+    turns_per = int(meta["user_turns_per_conversation"])
+    shared = int(meta.get("shared_system_prefix_tokens", 0))
+    per_conv = int(meta.get("per_conversation_prefix_tokens", 0))
+    new_user = meta.get("new_user_tokens_per_turn", 128)
+    out_tok = meta.get("output_tokens_per_turn_pinned", 128)
+    arrival = meta.get("arrival", {})
+
+    mode, rate, start_gap, think, parsed_seed = parse_arrival(arrival, default_seed=0)
+    rng = random.Random(parsed_seed if seed is None else seed)
+
+    if isinstance(new_user, list):
+        user_list = [int(x) for x in new_user]
+    else:
+        user_list = [int(new_user)] * turns_per
+
+    if isinstance(out_tok, list):
+        out_list = [int(x) for x in out_tok]
+    else:
+        out_list = [int(out_tok)] * turns_per
+
+    expected = meta.get("total_requests", meta.get("total_request"))
+    if expected is not None and int(expected) != n_conv * turns_per:
+        print(
+            f"[warn] total_requests={expected} != num_conversations*turns ({n_conv * turns_per})"
+        )
+
     turns: list[Turn] = []
     t = 0.0
     for c in range(n_conv):
+        conv_t = t + c * start_gap
         hist = 0
         for turn in range(turns_per):
-            isl = hist + rng.randint(64, 512)
-            osl = rng.randint(32, 256)
-            turns.append(Turn(t, f"c{c}", turn, isl, osl))
+            user_new = user_list[min(turn, len(user_list) - 1)]
+            if turn == 0:
+                isl = shared + per_conv + user_new
+            else:
+                # Growing context: prior tokens + new user turn (chat-style)
+                isl = hist + user_new
+            osl = out_list[min(turn, len(out_list) - 1)]
+            if mode.startswith("poisson") and turn == 0 and c > 0:
+                conv_t += rng.expovariate(max(rate, 1e-6))
+            turns.append(
+                Turn(
+                    arrival_s=conv_t,
+                    conversation_id=f"c{c}",
+                    turn_id=turn,
+                    input_tokens=isl,
+                    output_tokens=osl,
+                    shared_prefix_tokens=shared,
+                    per_conv_prefix_tokens=per_conv if turn == 0 else 0,
+                )
+            )
             hist = isl + osl
-            t += rng.uniform(0.5, 3.0)  # think time + gap
-            t += osl * 0.02
+            conv_t += think
+        t = max(t, conv_t)
     return turns
 
 
-@dataclass
-class ServerModel:
-    """Very rough local model of TTFT/TPOT under concurrency pressure."""
-
-    prefill_ms_per_token: float = 0.05
-    decode_ms_per_token: float = 25.0
-    prefix_hit_ratio: float = 0.6  # multi-turn reuse
-    chunked: bool = True
-    capacity: float = 1.0  # >1 = faster hypothetically
+def default_synthetic_meta() -> dict:
+    return {
+        "num_conversations": 32,
+        "user_turns_per_conversation": 4,
+        "total_request": 128,
+        "shared_system_prefix_tokens": 512,
+        "per_conversation_prefix_tokens": 256,
+        "new_user_tokens_per_turn": [128, 96, 96, 96],
+        "output_tokens_per_turn_pinned": [64, 96, 96, 128],
+        "arrival": {
+            "mode": "poisson",
+            "rate_per_s": 4.0,
+            "conversation_start_gap_s": 0.02,
+            "think_time_s": 0.3,
+        },
+    }
 
 
 def estimate_latencies(turns: list[Turn], model: ServerModel) -> list[tuple[float, float, bool]]:
-    """Return list of (ttft_s, tpot_s, ok) per turn."""
-    # Track last end time of each conversation for causal multi-turn
     conv_ready: dict[str, float] = {}
-    gpu_busy_until = 0.0
+    gpu_free_at = 0.0
+    shared_cached = False
     out: list[tuple[float, float, bool]] = []
 
     for turn in sorted(turns, key=lambda x: (x.arrival_s, x.conversation_id, x.turn_id)):
-        start = max(turn.arrival_s, conv_ready.get(turn.conversation_id, 0.0), gpu_busy_until * 0.1)
-        # Prefix: later turns pay less prefill
-        effective_prefill = turn.input_tokens
-        if turn.turn_id > 0:
-            effective_prefill = int(turn.input_tokens * (1.0 - model.prefix_hit_ratio))
+        start = max(turn.arrival_s, conv_ready.get(turn.conversation_id, 0.0))
+        queue = max(0.0, gpu_free_at - start)
+        begin = start + queue
 
-        prefill_s = (effective_prefill * model.prefill_ms_per_token / 1000.0) / model.capacity
+        billable = turn.input_tokens
+        if model.prefix_cache:
+            if turn.shared_prefix_tokens and shared_cached:
+                billable -= int(turn.shared_prefix_tokens * model.shared_prefix_hit)
+            if turn.turn_id > 0:
+                # approximate history reuse
+                hist = max(turn.input_tokens - turn.shared_prefix_tokens - 64, 0)
+                billable -= int(hist * model.history_hit)
+            billable = max(billable, 16)
+            if turn.shared_prefix_tokens:
+                shared_cached = True
+
+        prefill_s = (billable * model.prefill_ms_per_token / 1000.0) / model.capacity
         if model.chunked:
-            prefill_s *= 0.85  # crude: less HoL → slightly better decode path
+            prefill_s *= 0.9
 
-        decode_s = (turn.output_tokens * model.decode_ms_per_token / 1000.0) / model.capacity
-        ttft = prefill_s + (model.decode_ms_per_token / 1000.0) / model.capacity
-        tpot = decode_s / max(turn.output_tokens, 1)
+        decode_token_s = (model.decode_ms_per_token / 1000.0) / model.capacity
+        ttft = prefill_s + decode_token_s
+        tpot = decode_token_s
+        # mild contention penalty
+        ttft += queue * 0.15
+        tpot *= 1.0 + min(queue, 0.05) * 2.0
 
-        # Simple queue pressure
-        queue_wait = max(0.0, gpu_busy_until - start)
-        ttft += queue_wait * 0.5
-
-        end = start + queue_wait + prefill_s + decode_s
-        gpu_busy_until = end
-        conv_ready[turn.conversation_id] = end + 0.5  # think time placeholder
+        end = begin + prefill_s + turn.output_tokens * decode_token_s
+        gpu_free_at = end
+        conv_ready[turn.conversation_id] = end
 
         ok = turn.output_tokens > 0
         out.append((ttft, tpot, ok))
@@ -158,41 +257,59 @@ def score_request(ttft: float, tpot: float, ok: bool, p: Params) -> float:
 
 def run(turns: list[Turn], params: Params, model: ServerModel) -> dict:
     lats = estimate_latencies(turns, model)
-    scores = [score_request(ttft, tpot, ok, params) for ttft, tpot, ok in lats]
-    ers = sum(scores) / max(len(scores), 1)
-    zeros = sum(1 for s in scores if s == 0.0)
+    scores = [score_request(a, b, ok, params) for a, b, ok in lats]
+    n = max(len(scores), 1)
     return {
         "n": len(scores),
-        "ers": ers,
-        "zero_rate": zeros / max(len(scores), 1),
-        "mean_ttft_s": sum(t[0] for t in lats) / max(len(lats), 1),
-        "mean_tpot_s": sum(t[1] for t in lats) / max(len(lats), 1),
+        "ers": sum(scores) / n,
+        "zero_rate": sum(1 for s in scores if s == 0.0) / n,
+        "mean_ttft_ms": 1000.0 * sum(t[0] for t in lats) / n,
+        "mean_tpot_ms": 1000.0 * sum(t[1] for t in lats) / n,
+        "p95_ttft_ms": 1000.0 * sorted(t[0] for t in lats)[int(0.95 * (len(lats) - 1))],
     }
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--trace", type=Path, help="JSONL redacted trace")
-    ap.add_argument("--synthetic", action="store_true", help="Use synthetic multi-turn trace")
-    ap.add_argument("--params", type=Path, default=None, help="JSON with f_ttft,c_ttft,...")
-    ap.add_argument("--prefix-hit", type=float, default=0.6)
-    ap.add_argument("--capacity", type=float, default=1.0, help=">1 simulates faster stack")
+    ap.add_argument("--trace", type=Path, help="JSONL turn trace")
+    ap.add_argument("--meta", type=Path, help="Official-style meta JSON")
+    ap.add_argument("--synthetic", action="store_true")
+    ap.add_argument("--params", type=Path, default=Path("configs/ers_params.example.json"))
+    ap.add_argument("--no-prefix-cache", action="store_true")
     ap.add_argument("--no-chunked", action="store_true")
+    ap.add_argument("--capacity", type=float, default=1.0)
+    ap.add_argument("--decode-ms", type=float, default=8.0)
+    ap.add_argument("--compare-baseline", action="store_true", help="Also print no-prefix / no-chunked")
     args = ap.parse_args()
 
-    if not args.synthetic and args.trace is None:
-        ap.error("pass --synthetic or --trace PATH")
+    if not args.synthetic and args.trace is None and args.meta is None:
+        ap.error("pass --synthetic or --meta PATH or --trace PATH")
 
-    turns = synthetic_trace() if args.synthetic else load_trace(args.trace)
-    params = load_params(args.params)
+    if args.synthetic:
+        turns = expand_meta(default_synthetic_meta())
+    elif args.meta is not None:
+        turns = expand_meta(json.loads(args.meta.read_text()))
+    else:
+        turns = load_trace_jsonl(args.trace)
+
+    params = load_params(args.params if args.params.exists() else None)
     model = ServerModel(
-        prefix_hit_ratio=args.prefix_hit,
-        capacity=args.capacity,
+        prefix_cache=not args.no_prefix_cache,
         chunked=not args.no_chunked,
+        capacity=args.capacity,
+        decode_ms_per_token=args.decode_ms,
     )
     summary = run(turns, params, model)
-    print(json.dumps({"params": params.__dict__, "model": model.__dict__, **summary}, indent=2))
-    print(f"\nERS_hat ≈ {summary['ers']:.4f}  (ranking signal only, not H200 truth)")
+    print(json.dumps({"params": asdict(params), "model": asdict(model), **summary}, indent=2))
+    print(f"\nERS_hat ≈ {summary['ers']:.4f}  | mean TPOT {summary['mean_tpot_ms']:.2f} ms (ranking only)")
+
+    if args.compare_baseline:
+        for label, m in [
+            ("no_prefix", ServerModel(prefix_cache=False, chunked=model.chunked, capacity=model.capacity, decode_ms_per_token=model.decode_ms_per_token)),
+            ("no_chunked", ServerModel(prefix_cache=model.prefix_cache, chunked=False, capacity=model.capacity, decode_ms_per_token=model.decode_ms_per_token)),
+        ]:
+            s = run(turns, params, m)
+            print(f"compare[{label}] ERS_hat≈{s['ers']:.4f} mean_tpot_ms={s['mean_tpot_ms']:.2f}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ model_weights/**
 
 # Python
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
@@ -27,3 +28,6 @@ artifacts/
 # Docker
 *.tar
 *.tar.gz
+
+# Local Cursor / agent plans (do not commit)
+cursor/

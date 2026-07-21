@@ -1,3 +1,6 @@
+# S1S2 one-shot (2026-07-21 last daily submit) — same as root docker-compose.yml
+# Rationale: workload peak ~4.4k → maxlen 8192 frees KV; bt=2048 prioritizes decode/TPOT
+# (TTFT still has huge headroom vs 400ms ceiling). Same image p0 — no rebuild.
 services:
   model:
     image: longquanton/develarper-lfm25:p0

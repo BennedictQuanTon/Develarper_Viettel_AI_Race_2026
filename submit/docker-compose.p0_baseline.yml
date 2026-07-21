@@ -1,3 +1,4 @@
+# Archived P0 (Score 49.81) — do not overwrite Hub tag p0
 services:
   model:
     image: longquanton/develarper-lfm25:p0
@@ -10,12 +11,10 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct
       - --host=0.0.0.0
       - --port=8000
-      - --max-model-len=8192
+      - --max-model-len=32768
       - --gpu-memory-utilization=0.95
       - --tensor-parallel-size=1
       - --enable-prefix-caching
-      - --enable-chunked-prefill
-      - --max-num-batched-tokens=2048
     ports:
       - "8000:8000"
     shm_size: "2g"

@@ -1,20 +1,23 @@
-# Build-time may use network. Runtime on BTC MiG must be offline.
-# BTC baseline: vllm/vllm-openai:v0.22.1
-# If LFM2.5 does not load, rebuild with e.g.:
+# Competition image for MiG H200 (CUDA 13 / driver 590.x).
+#
+# IMPORTANT: Official LFM2.5 recipes require vLLM >= 0.23.0.
+# BTC sample compose uses v0.22.1 — that tag may NOT load Lfm2ForCausalLM.
+# Default here: CUDA 13 image. Override if needed:
 #   docker build --build-arg VLLM_IMAGE=vllm/vllm-openai:v0.23.0 -t ...
+#
+# Build (from repo root, after downloading weights):
+#   make download-model
+#   make build
+#
+# Runtime must be offline (weights already in /model).
 
-ARG VLLM_IMAGE=vllm/vllm-openai:v0.22.1
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.23.0
 FROM ${VLLM_IMAGE}
 
-ARG MODEL_ID=LiquidAI/LFM2.5-1.2B-Instruct
-ENV MODEL_ID=${MODEL_ID}
+# Expect local bake path produced by: scripts/download_model.sh
+COPY model_weights/LFM2.5-1.2B-Instruct /model
 
-# Bake weights into /model (requires network during `docker build` only).
-RUN python3 -c "\
-from huggingface_hub import snapshot_download;\
-import os;\
-mid=os.environ['MODEL_ID'];\
-snapshot_download(repo_id=mid, local_dir='/model', local_dir_use_symlinks=False);\
-print('OK', mid, '-> /model')"
+# Sanity: fail build early if config missing
+RUN test -f /model/config.json && ls -lah /model | head
 
 EXPOSE 8000

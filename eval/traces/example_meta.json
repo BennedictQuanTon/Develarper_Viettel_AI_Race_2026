@@ -1,0 +1,16 @@
+{
+  "num_conversations": 32,
+  "user_turns_per_conversation": 4,
+  "total_request": 128,
+  "shared_system_prefix_tokens": 512,
+  "per_conversation_prefix_tokens": 256,
+  "new_user_tokens_per_turn": [128, 96, 96, 96],
+  "output_tokens_per_turn_pinned": [64, 96, 96, 128],
+  "arrival": {
+    "mode": "poisson",
+    "rate_per_s": 4.0,
+    "conversation_start_gap_s": 0.02,
+    "think_time_s": 0.3
+  },
+  "notes": "Synthetic stand-in until BTC publishes the real redacted trace/meta. Field names match PROBLEM_VN.md."
+}

@@ -1,12 +1,7 @@
-# Compose shape expected by BTC portal (Phase 1).
-# 1) Build & push a PUBLIC image with weights at /model (runtime offline).
-# 2) Replace `image:` with your Hub repo:tag (pin digest for freeze).
-# 3) Only edit `command` flags / image — keep entrypoint form.
-
+# Ablation A1 — lower memory util (safer on 18GB if OOM)
 services:
   model:
-    # TODO: replace with team public image, e.g. yourorg/develarper-lfm25:p0
-    image: vllm/vllm-openai:v0.22.1
+    image: longquanton/develarper-lfm25:p0
     entrypoint:
       - python3
       - -m
@@ -17,7 +12,7 @@ services:
       - --host=0.0.0.0
       - --port=8000
       - --max-model-len=32768
-      - --gpu-memory-utilization=0.95
+      - --gpu-memory-utilization=0.90
       - --tensor-parallel-size=1
       - --enable-prefix-caching
     ports:
