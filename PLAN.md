@@ -4,48 +4,110 @@
 > Chiến lược nền: [CONTEXT.md](CONTEXT.md) · Đề: [PROBLEM_VN.md](PROBLEM_VN.md) · Nộp: [SUBMIT.md](SUBMIT.md)  
 > **Model:** `LiquidAI/LFM2.5-1.2B-Instruct` · **Slice:** MiG H200 **18GB** · **Engine:** **vLLM only**  
 > **Image baseline:** `longquanton/develarper-lfm25:p0` (vLLM **0.23.0**, weights bake `/model`)  
-> **Deadline Phase 1:** 30/07/2026 · Cập nhật plan: **2026-07-21** (sau P0 Score **49.81**)
+> **Deadline Phase 1:** 30/07/2026 · Cập nhật: **2026-07-21 đêm** — gói **X1 Decode-Max** (thay B1 nhỏ lẻ)
 
 ---
 
-## ★ TODAY 2026-07-21 — 1 lượt nộp còn lại → ONE-SHOT `S1S2`
+## ★ X1 DECODE-MAX — lần nộp “lớn” tiếp theo (Δ-safe + ERS)
 
-Constraint: **không còn room ablation 1-biến**. Chọn **1 compose compound** EV cao nhất, rủi ro fail boot thấp, **không rebuild image**.
+### Plan cũ (B1 chỉ +FP8) đổi thành gì?
 
-| Quyết định | Chi tiết |
+| Trước (sau S1S2) | **Nay (X1)** |
 |---|---|
-| **ID** | **S1S2** |
-| **File nộp** | root [`docker-compose.yml`](docker-compose.yml) (đã sẵn) |
-| **Image** | `longquanton/develarper-lfm25:p0` (giữ nguyên) |
-| **Đổi so P0** | `max-model-len` **32768→8192** · + `--enable-chunked-prefill` · + `--max-num-batched-tokens=2048` |
-| **Giữ** | prefix ON · mem 0.95 · TP=1 · BF16 · entrypoint BTC |
-| **Không đưa vào shot này** | FP8 / KV-FP8 / `-O3` / speculative (rủi ro boot/Δ, chưa A/B) |
+| +1 flag `--quantization=fp8` | **Gói 3 đòn bẩy compute/latency**, **không** quant weights |
+| Rủi ro Δ GPQA nếu FP8 | **Giữ BF16** → f(Δ) / Accuracy Gate thân thiện |
+| Lặp kiểu “lí nhí” | Một submit **đổi lớp** so với P0 & S1S2 |
 
-**Vì sao đây là tối ưu cho đúng 1 shot:**
+### Vì sao không lặp S1S2 / không FP8 ngay?
 
-1. **TPOT = nút thắt** (6ms → s_tpot≈0.20). `batched-tokens=2048` ưu tiên decode/ITL mạnh hơn 4096; TTFT còn dư lớn (p95 84≪400).
-2. **`max-model-len=8192`** khớp workload peak ~4400 (+margin) → giải phóng KV trên 18GB → concurrency↑, preemption/fail↓ — đòn bẩy lớn nhất không cần rebuild.
-3. Chunked + prefix giữ đúng tinh thần đề / recipe LFM2.5.
-4. FP8/`-O3` để **ngày mai** nếu S1S2 thắng hoặc cần pivot.
+- S1S2 chứng minh: `maxlen` + `bt=2048` **không** hạ TBT (vẫn 6ms), còn làm Score↓.
+- FP8 có thể ↑ERS nhưng **đốt Δ** — bạn muốn ERS cao **và** delta còn tốt cho hậu kiểm → để FP8 là **X2** chỉ khi X1 chưa đủ.
 
-**Archive:** `submit/docker-compose.p0_baseline.yml` · `submit/docker-compose.s1s2_oneshot.yml`
+### Gói X1 (cùng image `p0`, không rebuild)
 
-**User làm gì:** đợi ≥600s từ P0 (13:31) → Portal upload **đúng file** `docker-compose.yml` ở root → ghi Score/fail/ttft/tbt vào ablation sheet.
+| Thành phần | Flag (đã có trên vLLM **0.23**) | Tác dụng | Δ / anti-cheat |
+|---|---|---|---|
+| Prefill reuse | `--enable-prefix-caching` (giữ P0) | Shared 1000-tok prefix | Trung thực |
+| Compile aggress | `--optimization-level=3` | Recipe LFM2.5 ~+steady decode | Cùng weights → Δ≈0 |
+| Latency mode | `--performance-mode=interactivity` | CUDA graph/kernel thiên **latency / ITL** (đánh TBT) | Δ≈0 |
+| Spec decode | `--speculative-config` **ngram** (5 tok, lookup 4) | Nhiều token/verify bước; **target model verify** → phân phối giữ | Hợp lệ vLLM; không draft lạ, không đổi `/model` |
+| **Cố ý bỏ** | maxlen↓, bt=2048, FP8, `--disable-log-requests` | Đã fail / sai tên / rủi ro Δ | — |
+
+**File nộp:** root [`docker-compose.yml`](docker-compose.yml) = [`submit/docker-compose.x1_decode_max.yml`](submit/docker-compose.x1_decode_max.yml)
+
+**Locked BTC (không đụng):** entrypoint `python3 -m vllm.entrypoints.openai.api_server` · `--model=/model` · served-name · host/port · image public `p0` · không mạng runtime · không dual-path.
+
+### Kỳ vọng số (không cam kết)
+
+| | P0 | X1 mục tiêu |
+|---|---|---|
+| tbt_median | 6 ms | **≤4 ms** (ngram + interactivity + O3) |
+| Score | 49.81 | **≥55** nếu TBT về ~4; stretch **≥60** nếu ~3 |
+| fail | 7 | ≤7 (ngram không kỳ vọng sửa fail systematic) |
+| f_delta online | 1 | 1; GPQA sau vẫn ưu tiên BF16 path |
+
+### Rủi ro X1 & xử lý
+
+| Rủi ro | Mitigate |
+|---|---|
+| Startup lâu vì `-O3` → healthcheck fail | Nếu exit sớm: nộp lại bản **X1b** bỏ `-O3`, giữ ngram+interactivity |
+| Ngram acceptance thấp dưới tải → Score≤P0 | Rollback P0; thử **X2** = P0+FP8 (đổi Δ) hoặc suffix speculative |
+| JSON speculative parse lỗi Portal | Fallback `X1c`: `--spec-method=ngram` + `--spec-tokens=5` |
+
+### Bạn làm gì để nộp X1
+
+1. Còn quota ngày / ≥600s từ S1S2.  
+2. Upload **root `docker-compose.yml`** (đã = X1). Không push image.  
+3. Gửi Score, fail, ttft_p50/p95, tbt → cập nhật ablation.  
+4. Shortlist cuối: luôn giữ **P0** (+ X1 nếu thắng và Δ ổn).
 
 ---
 
-## 0. Executive verdict (đọc trước khi đụng flag)
+## ★ Ngân sách eval còn lại (ước lượng)
 
-| Kết luận | Chi tiết |
+| Constraint BTC | Số |
 |---|---|
-| P0 đã **hợp lệ** | Boot OK, prefix ON, f_delta=1, Score≈49.81 → ERS≈**0.498** |
-| Nút thắt #1 | **TPOT / TBT median = 6ms** (ceiling chỉ 10ms, γ=2) — chiếm hầu hết mất điểm |
-| Nút thắt #2 | **failed_count = 7/420** — mỗi fail → S=0 cho request đó |
-| TTFT gần bão hòa | p50=48 / p95=84 ≪ 400ms — cải thiện TTFT cho **ít ERS** hơn TPOT |
-| Đòn bẩy hợp lệ còn lớn | Giảm `max-model-len` theo workload, chunked/batched-tokens, FP8, KV-FP8, `-O3`, n-gram speculative, bake compile-cache |
-| Không làm | Đổi engine, đổi model, mạng runtime, dual-path, “cheat latency” |
+| Max / ngày | **5** |
+| Gap | **≥600s** |
+| Deadline Phase 1 | **30/07/2026** (~9 ngày từ 21/07) |
+| Trần lý thuyết | 9×5 ≈ **45** |
+| Thực tế nên dùng | **~10–15** submit có ý nghĩa (mỗi lần 1 giả thuyết rõ) |
+| Đã có điểm | P0 49.81 · S1S2 48.45 (**2**) |
+| Shortlist GPQA | chọn **≤5** bài cuối (P0 bắt buộc trong đó) |
 
-**Một câu chiến lược:** *Giữ đúng LFM2.5 + vLLM + entrypoint BTC; ép **decode ổn định dưới tải multi-turn** (TPOT → gần 1–3ms) và **failed→0**, rồi mới đụng quant/source patch.*
+**Lịch đề xuất (không đốt 5/ngày vô ích):**
+
+```text
+Ngày A:  X1 Decode-Max          ← bạn sắp nộp
+Ngày B:  nhánh theo X1 (1 shot)
+         · thắng → X1-tune (ngram 3 hoặc 7) HOẶC giữ + thử X2 FP8 riêng
+         · thua  → X1b (bỏ O3) hoặc X2 FP8
+Ngày C–E: tối đa 1–2/ngày tinh chỉnh winner
+Cuối kỳ: freeze ≤5 (P0 + best ERS Δ-safe + …)
+```
+
+→ Khoảng **6–10 eval nữa** là đủ bao phủ hướng lớn; không cần 45.
+
+---
+
+## ★ ARCHIVE nhanh
+
+| ID | Score | Lesson |
+|---|---|---|
+| P0 | **49.81** | Champion BF16 · GPQA |
+| S1S2 | 48.45 | maxlen+bt **không** hạ TBT — cấm lặp |
+| B1 FP8 đơn | (hoãn) | Thành **X2** sau X1 nếu cần ERS thêm và chấp nhận rủi ro Δ |
+
+---
+
+## 0. Executive verdict
+
+| | |
+|---|---|
+| Champion | **P0 = 49.81** |
+| Next | **X1 Decode-Max** (O3 + interactivity + ngram, BF16) |
+| Triết lý | Sáng tạo trong biên vLLM; **ERS↑ không đánh đổi Δ** ở shot này |
+| Cấm | S1S2-style · disable-log-requests · engine khác · tráo image `p0` |
 
 ---
 
@@ -202,17 +264,15 @@ flowchart TD
   C1 --> Gate[Chọn ≤5: best ERS + ≥1 BF16 sạch]
 ```
 
-### Hàng đợi nộp đề xuất
+### Hàng đợi nộp
 
-> **2026-07-21:** hàng đợi 1-biến bị ghi đè bởi **S1S2 one-shot** (hết lượt trong ngày). Xem § ★ TODAY.
-
-| # | ID | Thay đổi so với best hiện tại | Image | Mục tiêu quan sát |
-|---|---|---|---|---|
-| ✓ | **S1S2** | maxlen=8192 + chunked + bt=2048 | `p0` | TPOT↓ fail↓ — **nộp hôm nay** |
-| next | **A1** | `--quantization fp8` trên best BF16 | `p0` | ERS↑? (ngày mai+) |
-| next | **B1** | `--optimization-level 3` | tag `p1` | +decode |
-| next | **C1** | n-gram speculative | `p1`/`p2` | nếu TPOT còn cao |
-| backup | A2 / bt=4096 / maxlen=12288 | tinh chỉnh nếu S1S2 lệch | `p0` | rollback có kiểm soát |
+| # | ID | Nội dung | Mục tiêu |
+|---|---|---|---|
+| ✓ | P0 | BF16 baseline | Champion **49.81** |
+| ✓ | S1S2 | maxlen+bt | Fail — không lặp |
+| **1** | **X1** | O3 + interactivity + ngram BF16 | **Nộp lớn tiếp theo** |
+| 2 | X1b/X1c | fallback nếu boot/JSON | Theo PLAN ★ X1 |
+| 3 | X2 | FP8 trên P0 | Chỉ nếu cần ERS thêm (rủi ro Δ) |
 
 **Winner rule:** ERS↑ **và** failed_count không tăng → giữ; ngược lại rollback.  
 **Accuracy:** luôn giữ **≥1** submission BF16 (P0 hoặc best BF16) trong shortlist GPQA.
@@ -279,28 +339,11 @@ Daily 15’: Score mới / fail / còn mấy lượt / ID tiếp theo trong §4.
 
 ## 9. Next actions
 
-### Ngay (hết lượt hôm nay sau S1S2)
+1. Nộp **X1** — root `docker-compose.yml` (đã sẵn).  
+2. Giữ P0 trong shortlist GPQA.  
+3. Nhánh sau X1: xem § ★ X1 (X1b / X2 FP8).
 
-1. Upload root `docker-compose.yml` (**S1S2**) lên Portal — xem § ★ TODAY.
-2. Ghi metrics vào `eval/ablation_sheet.md`.
-
-### Ngày mai (còn lượt) — nhánh theo kết quả S1S2
-
-| Nếu S1S2… | Làm tiếp |
-|---|---|
-| ERS↑ và fail≤7 | Giữ làm baseline; thử **FP8** (`b1`) hoặc `bt=4096` tinh chỉnh |
-| Fail↑ hoặc score↓ do maxlen | Rollback flags P0 / thử `maxlen=12288` |
-| Score↑ nhưng TPOT vẫn ≥5ms | Image `p1` + `--optimization-level 3` rồi n-gram speculative |
-| Luôn | Giữ digest **P0 BF16** trong shortlist Accuracy Gate |
-
-```bash
-# Chỉ khi tới image mới
-make build IMAGE_REPO=longquanton/develarper-lfm25 TAG=p1
-./scripts/set_image.sh longquanton/develarper-lfm25:p1
-make push IMAGE_REPO=longquanton/develarper-lfm25 TAG=p1
-```
-
-Chi tiết nộp: **[SUBMIT.md](SUBMIT.md)**.
+Chi tiết: **[SUBMIT.md](SUBMIT.md)**.
 
 ---
 

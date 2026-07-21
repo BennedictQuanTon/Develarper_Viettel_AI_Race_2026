@@ -15,8 +15,9 @@ GPQA baseline (ref): ~0.4 · Δ ≤ 0.10 → f(Δ)=1
 
 | Submission | Hub image | Score / ERS | Status |
 |---|---|---|---|
-| **P0** (2026-07-21 13:31) | `longquanton/develarper-lfm25:p0` | **49.81** (fΔ=1 → ERS≈0.498) | Baseline BF16 · Accuracy Gate candidate |
-| **S1S2** (one-shot, same day) | same `p0` | *pending Portal* | Current Portal compose |
+| **P0** (2026-07-21 13:31) | `longquanton/develarper-lfm25:p0` | **49.81** | **Champion** · GPQA candidate · root compose rollback |
+| **S1S2** (maxlen 8192 + bt 2048) | same `p0` | **48.45** | **Rejected** (TBT vẫn 6ms, fail vẫn 7) |
+| **B1** (next) | same `p0` | pending | P0 + `--quantization=fp8` — xem PLAN.md |
 
 Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md)
 
@@ -53,22 +54,23 @@ Online = **ERS only**. After online: choose ≤5 submissions → BTC hậu kiể
 
 ---
 
-## 3. What we optimized (S1S2)
+## 3. What we optimized
 
-Constraint on 2026-07-21: **one remaining daily submit** → compound one-shot (no image rebuild).
+### S1S2 (rejected — Score 48.45 < P0 49.81)
 
-| Knob | P0 | S1S2 (current `docker-compose.yml`) | Why |
-|---|---|---|---|
-| Image | `…:p0` | **unchanged** | Already scored; don’t overwrite tag |
-| `--max-model-len` | 32768 | **8192** | Workload peak ~4.4k; free KV on 18GB → concurrency↑, preemption/fail↓ |
-| Chunked prefill | (default) | **`--enable-chunked-prefill`** | Prefer decode under multi-turn load |
-| `--max-num-batched-tokens` | unset | **2048** | Smaller budget → better ITL/TPOT; TTFT still has headroom |
-| Prefix / mem / TP | ON / 0.95 / 1 | same | Keep BTC-aligned baseline |
-| Quant | BF16 | BF16 | FP8 deferred (Accuracy Gate + one-shot risk) |
+Tried `max-model-len=8192` + chunked + `max-num-batched-tokens=2048`. **TBT stayed 6ms, fails stayed 7**, TTFT slightly worse → scheduler/KV compound is **not** the lever. Archive only: `submit/docker-compose.s1s2_oneshot.yml`.
 
-**Not in this shot:** online FP8, KV-FP8, `--optimization-level 3`, speculative decoding (next days if S1S2 wins or needs pivot).
+### Next: B1 FP8 (1 flag on P0 baseline)
 
-Archives: [`submit/docker-compose.p0_baseline.yml`](submit/docker-compose.p0_baseline.yml) · [`submit/docker-compose.s1s2_oneshot.yml`](submit/docker-compose.s1s2_oneshot.yml)
+| Knob | Value |
+|---|---|
+| Base | Identical to P0 |
+| Add | `--quantization=fp8` |
+| File | `submit/docker-compose.b1_fp8.yml` |
+
+Rationale: same TBT on two BF16 configs ⇒ need **compute** path (Hopper FP8), not smaller batch token budget. Keep P0 for Accuracy Gate if FP8 wins ERS but hurts Δ.
+
+Full plan: [PLAN.md](PLAN.md) § ★ SAU S1S2.
 
 ---
 

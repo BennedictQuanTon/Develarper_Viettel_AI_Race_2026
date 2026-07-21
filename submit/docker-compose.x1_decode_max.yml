@@ -1,5 +1,9 @@
-# Portal current = X1 Decode-Max (see PLAN.md ★ X1)
-# Champion rollback archive: submit/docker-compose.p0_baseline.yml (Score 49.81)
+# X1 Decode-Max — ambitious Δ-safe package (next Portal submit)
+# Learnings: P0=49.81 champion · S1S2=48.45 (maxlen/bt không đụng TBT) → đổi lớp đòn bẩy
+# Keep BF16 weights (no FP8) → Accuracy Gate / f(Δ) ưu tiên
+# All flags verified on vLLM 0.23 engine_args (NOT --disable-log-requests)
+#
+# Same image: longquanton/develarper-lfm25:p0 — no rebuild required
 
 services:
   model:
