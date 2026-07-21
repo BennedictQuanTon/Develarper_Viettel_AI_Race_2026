@@ -28,3 +28,6 @@ artifacts/
 # Docker
 *.tar
 *.tar.gz
+
+# Local Cursor / agent plans (do not commit)
+cursor/

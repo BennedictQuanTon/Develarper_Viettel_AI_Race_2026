@@ -1,20 +1,16 @@
-# Local/dev compose (not for portal).
-# Portal submit file: docker-compose.submit.yml
+# =============================================================================
+# PORTAL SUBMIT FILE — copy/rename to docker-compose.yml when uploading
+# =============================================================================
+# Before submit:
+#   1) make download-model && make build && make push IMAGE_REPO=<you>/develarper-lfm25
+#   2) set image: below to that public tag (prefer digest pin)
+#   3) keep entrypoint exactly as BTC sample (python3 -m vllm.entrypoints.openai.api_server)
+#
+# Default image base: CUDA13 vLLM (LFM2.5 needs >=0.23). Do NOT use v0.22.1 unless verified.
 
 services:
-  mock:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./scripts:/app/scripts:ro
-    command: ["python", "scripts/mock_openai_server.py", "--host", "0.0.0.0", "--port", "8000"]
-    ports:
-      - "8000:8000"
-    profiles: ["mock"]
-
-  # GPU path: use pre-built competition image (after make build)
   model:
-    image: ${IMAGE_REPO:-develarper-lfm25:p0}
+    image: longquanton/develarper-lfm25:p0
     entrypoint:
       - python3
       - -m
@@ -32,5 +28,10 @@ services:
     ports:
       - "8000:8000"
     shm_size: "2g"
-    gpus: all
-    profiles: ["gpu"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
