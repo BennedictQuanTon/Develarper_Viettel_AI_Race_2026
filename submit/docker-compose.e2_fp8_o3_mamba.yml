@@ -1,5 +1,7 @@
-# Portal = E2 (after E1+ Score 59.57). See PLAN.md
-# Archive E1+: submit/docker-compose.e1_fp8.yml (FP8+KV only)
+# E2 — E1+ proven FP8 stack + O3 + mamba flashinfer (Δ-safe; no speculative)
+# E1+ Portal: Score 59.57 · tbt 4ms (was 6) · fail still 7
+# Goal: push TBT toward ~3ms → Score ~65–72; stretch path to 80 needs ~2ms later
+# Image: longquanton/develarper-lfm25:p0
 
 services:
   model:

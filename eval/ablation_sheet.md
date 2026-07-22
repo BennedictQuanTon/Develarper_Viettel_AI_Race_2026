@@ -1,10 +1,11 @@
-# Ablation — evidence-first
+# Ablation
 
-| ID | Score | Evidence role |
-|---|---|---|
-| **P0** | **49.81** | tbt=6 · GPQA anchor |
-| S1S2 | 48.45 | scheduler không hạ tbt |
-| X1 | FAIL probe | cấm speculative |
-| **E1** | *next* | P0 + `--quantization=fp8` only |
+| ID | Score | tbt | fail | Keep? |
+|---|---|---|---|---|
+| P0 | **49.81** | 6 | 7 | Y GPQA |
+| S1S2 | 48.45 | 6 | 7 | N |
+| X1 | FAIL probe | — | — | N |
+| **E1+** | **59.57** | **4** | 7 | Y ERS |
+| **E2** | *next* | ? | ? | E1+ + O3 + mamba FI |
 
-Nộp: root `docker-compose.yml`. Xem `PLAN.md`.
+Nộp: root `docker-compose.yml` = E2. Plan: `PLAN.md`.

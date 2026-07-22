@@ -30,4 +30,4 @@ artifacts/
 *.tar.gz
 
 # Local Cursor / agent plans (do not commit)
-cursor/
+.cursor/

@@ -1,4 +1,4 @@
-# Archive copy of E1+ (root docker-compose.yml)
+# E1+ archive — Portal Score 59.57 (2026-07-22) · tbt 4ms · fail 7
 
 services:
   model:
