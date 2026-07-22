@@ -15,9 +15,12 @@ GPQA baseline (ref): ~0.4 · Δ ≤ 0.10 → f(Δ)=1
 
 | Submission | Hub image | Score / ERS | Status |
 |---|---|---|---|
-| **P0** (2026-07-21 13:31) | `longquanton/develarper-lfm25:p0` | **49.81** | **Champion** · GPQA candidate · root compose rollback |
-| **S1S2** (maxlen 8192 + bt 2048) | same `p0` | **48.45** | **Rejected** (TBT vẫn 6ms, fail vẫn 7) |
-| **B1** (next) | same `p0` | pending | P0 + `--quantization=fp8` — xem PLAN.md |
+| **P0** (2026-07-21) | `p0` (BF16, v0.23.0) | **49.81** | GPQA anchor · immutable |
+| S1S2 (maxlen 8192+bt 2048) | `p0` | 48.45 | Rejected — TBT không đổi |
+| X1 (ngram speculative) | `p0` | **FAIL** | Crashed — banned |
+| **E1+** (FP8+KV FP8) | `p0` | **59.57** | Best ERS (v0.23) · GPQA candidate |
+| **E2-Safe** (v0.25.1+Chunked 1024) | `p1-v25` | **59.57** | TBT vẫn 4ms · fail 5 |
+| **Z1 FlashMamba** | `p1-v25` | **Pending** | **Current submit** · flashinfer+align+bt512 |
 
 Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md)
 
@@ -115,19 +118,23 @@ ERS (TTFT + TPOT) → leaderboard
 (post-online) ≤5 picks → GPQA → Score
 ```
 
-**Current serve command (S1S2):**
+**Current serve command (Z1 FlashMamba):**
 
 ```text
 python3 -m vllm.entrypoints.openai.api_server
   --model=/model
   --served-model-name=LFM2.5-1.2B-Instruct
   --host=0.0.0.0 --port=8000
-  --max-model-len=8192
+  --max-model-len=32768
   --gpu-memory-utilization=0.95
   --tensor-parallel-size=1
   --enable-prefix-caching
+  --quantization=fp8
+  --kv-cache-dtype=fp8
   --enable-chunked-prefill
-  --max-num-batched-tokens=2048
+  --max-num-batched-tokens=512
+  --mamba-backend=flashinfer
+  --mamba-cache-mode=align
 ```
 
 ---
@@ -227,10 +234,12 @@ Tuning `max-model-len`, chunked prefill, batched-tokens = allowed engine optimiz
 
 | Item | Status |
 |---|---|
-| Hub image `p0` (BF16, amd64, public) | Ready · **do not overwrite** |
-| P0 official Score | **49.81** |
-| Portal compose S1S2 | Ready · metrics **pending** |
-| Next ablations (FP8 / `-O3` / …) | After S1S2 readout + new daily quota |
-| Accuracy Gate shortlist | Keep P0 BF16 (+ best ERS if Δ-safe) |
+| Hub image `p0` (BF16, v0.23.0, amd64) | ✅ Ready · **immutable — GPQA anchor** |
+| Hub image `p1-v25` (BF16, v0.25.1, amd64) | ✅ Ready |
+| Best ERS online | **59.57** (E1+ & E2-Safe) |
+| Root `docker-compose.yml` | = **Z1 FlashMamba** (current submit) |
+| Z1 unlock | `--mamba-backend=flashinfer` + `--mamba-cache-mode=align` + bt=512 |
+| GPQA shortlist | P0 (BF16) + E1+/E2 (59.57) |
+| Target | ERS **~78-83** |
 
-*Last updated: 2026-07-21 · after P0 score + S1S2 one-shot ship*
+*Last updated: 2026-07-23 · Z1 FlashMamba submit*

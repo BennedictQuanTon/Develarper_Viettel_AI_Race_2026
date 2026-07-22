@@ -1,10 +1,16 @@
-# Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p1-v25
-# Stack: Z1 FlashMamba — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Mamba Cache Align
-# Target ERS: ~78-83 | Previous best: 59.57 (E2-Safe, bt=1024, no flashinfer)
-# Key unlocks vs E2-Safe:
-#   --mamba-backend=flashinfer  → native SSM kernel (safe on v0.25.1, was boot-fail on v0.23.0)
-#   --mamba-cache-mode=align    → cache Mamba SSM state at block boundaries (shared 1000-tok prefix)
-#   --max-num-batched-tokens=512 → decode xen kẽ dày hơn → TBT 4ms → ~2ms
+# Z1 FlashMamba — Optimal Config | Target ERS ~78-83
+# Submit: 2026-07-23 | Image: longquanton/develarper-lfm25:p1-v25 (vLLM v0.25.1)
+#
+# Unlocks vs E2-Safe (59.57):
+#   1. --mamba-backend=flashinfer  → native FlashInfer SSM kernels cho LFM2 hybrid layers
+#      (v0.23.0 boot-fail → v0.25.1 STABLE, auto-dispatch qua ssu_dispatch.py)
+#   2. --mamba-cache-mode=align    → cache Mamba SSM state tại block boundaries
+#      (align với KV cache prefix caching, required chunked-prefill đã có)
+#      → shared 1000-token prefix được cache FULL (KV + SSM state)
+#   3. --max-num-batched-tokens=512 → giảm từ 1024
+#      → decode 70 seqs xen kẽ dày hơn → TBT 4ms → ~2ms
+#
+# Expected: TBT ~2ms, fail 5→0-2, ERS ~78-83
 
 services:
   model:
