@@ -13,6 +13,10 @@
 
 ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
 FROM ${VLLM_IMAGE}
+ENV OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    VLLM_ATTENTION_BACKEND=FLASHINFER \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # Expect local bake path produced by: scripts/download_model.sh
 COPY model_weights/LFM2.5-1.2B-Instruct /model
