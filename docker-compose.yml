@@ -1,10 +1,10 @@
-# E2-Safe (Golden Bulletproof Config) — Optimized for Max ERS & 0% Boot Risk
-# Evidence-based: FP8 Weights + FP8 KV Cache + Chunked Prefill (1024) + Prefix Caching
-# Fixes: TPOT spikes + 7 failed requests timeout
+# E2-Safe (vLLM v0.25.1 Image) — Max ERS & 0% Boot Risk
+# Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p1-v25
+# Stack: FP8 Weights + FP8 KV Cache + Chunked Prefill (1024) + Prefix Caching
 
 services:
   model:
-    image: longquanton/develarper-lfm25:p0
+    image: longquanton/develarper-lfm25:p1-v25
     entrypoint:
       - python3
       - -m

@@ -6,6 +6,6 @@
 | S1S2 | 48.45 | 6 | 7 | N | Siết maxlen/bt (Scheduler không hạ TBT) |
 | X1 | FAIL probe | — | — | N | Speculative N-gram (Cấm nộp) |
 | **E1+** | **59.57** | **4** | 7 | Y ERS | FP8 Weight + FP8 KV Cache (+9.76 điểm) |
-| **E2-Safe** | *Ready* | ~2 | 0 | Y MAX | FP8 + FP8 KV + Chunked Prefill 1024 (An toàn 100%, Max ERS) |
+| **E2-Safe (v0.25.1)** | *Ready* | ~2 | 0 | Y MAX | Image `p1-v25` (v0.25.1) + FP8 + FP8 KV + Chunked Prefill 1024 |
 
-Nộp: root `docker-compose.yml` = E2-Safe. Xem `PLAN.md`.
+Nộp: root `docker-compose.yml` = E2-Safe (`p1-v25`). Xem `PLAN.md`.
