@@ -1,0 +1,29 @@
+# p2-fi image — vLLM v0.25.1 + flashinfer-python installed + LFM2.5 weights
+#
+# WHY: --mamba-backend=flashinfer requires flashinfer-python package.
+#      vllm/vllm-openai:v0.25.1 base image does NOT bundle it by default.
+#      This image adds it before baking weights so Z1 FlashMamba flags work.
+#
+# Build:
+#   make build-p2fi IMAGE_REPO=longquanton/develarper-lfm25 TAG=p2-fi
+# Push:
+#   make push IMAGE_REPO=longquanton/develarper-lfm25 TAG=p2-fi
+#
+# DO NOT overwrite :p0 or :p1-v25
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+FROM ${VLLM_IMAGE}
+
+# Install flashinfer-python — required for --mamba-backend=flashinfer
+# (native FlashInfer SSM kernels for LFM2 hybrid Mamba layers)
+# If this step fails during build, DO NOT proceed — fix before pushing to Hub.
+RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
+
+# Bake weights (offline runtime, no HF at serve time)
+COPY model_weights/LFM2.5-1.2B-Instruct /model
+
+# Sanity: fail build early if config missing
+RUN test -f /model/config.json && ls -lah /model | head
+
+EXPOSE 8000

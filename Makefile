@@ -4,9 +4,9 @@
 IMAGE_REPO ?= YOUR_DOCKERHUB/develarper-lfm25
 TAG        ?= p0
 PLATFORM   ?= linux/amd64
-VLLM_IMAGE ?= vllm/vllm-openai:v0.23.0
+VLLM_IMAGE ?= vllm/vllm-openai:v0.25.1
 
-.PHONY: help download-model preflight build build-baseline push tag-digest ers-sim smoke-mock submit-p0-compose
+.PHONY: help download-model preflight build build-baseline build-p2fi push tag-digest ers-sim smoke-mock submit-p0-compose
 
 help:
 	@echo "Targets:"
@@ -47,6 +47,18 @@ build-baseline:
 	  --platform $(PLATFORM) \
 	  --build-arg VLLM_IMAGE=vllm/vllm-openai:v0.22.1 \
 	  -t $(IMAGE_REPO):baseline-0221 \
+	  --load \
+	  .
+
+# p2-fi: vLLM v0.25.1 + flashinfer-python + LFM2.5 weights
+# Required for --mamba-backend=flashinfer (Z1 FlashMamba config)
+build-p2fi:
+	@test -f model_weights/LFM2.5-1.2B-Instruct/config.json || (echo "Run make download-model first"; exit 1)
+	docker buildx build \
+	  --platform $(PLATFORM) \
+	  -f Dockerfile.p2fi \
+	  --build-arg VLLM_IMAGE=vllm/vllm-openai:v0.25.1 \
+	  -t $(IMAGE_REPO):p2-fi \
 	  --load \
 	  .
 

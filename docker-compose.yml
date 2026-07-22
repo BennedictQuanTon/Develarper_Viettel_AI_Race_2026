@@ -1,14 +1,14 @@
-# Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p1-v25
+# Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p2-fi
 # Stack: Z1 FlashMamba — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Mamba Cache Align
 # Target ERS: ~78-83 | Previous best: 59.57 (E2-Safe, bt=1024, no flashinfer)
 # Key unlocks vs E2-Safe:
-#   --mamba-backend=flashinfer  → native SSM kernel (safe on v0.25.1, was boot-fail on v0.23.0)
+#   --mamba-backend=flashinfer  → native SSM kernel (p2-fi has flashinfer-python pre-installed)
 #   --mamba-cache-mode=align    → cache Mamba SSM state at block boundaries (shared 1000-tok prefix)
 #   --max-num-batched-tokens=512 → decode xen kẽ dày hơn → TBT 4ms → ~2ms
 
 services:
   model:
-    image: longquanton/develarper-lfm25:p1-v25
+    image: longquanton/develarper-lfm25:p2-fi
     entrypoint:
       - python3
       - -m

@@ -1,9 +1,9 @@
 # Z1 FlashMamba — Optimal Config | Target ERS ~78-83
-# Submit: 2026-07-23 | Image: longquanton/develarper-lfm25:p1-v25 (vLLM v0.25.1)
+# Submit: 2026-07-23 | Image: longquanton/develarper-lfm25:p2-fi (vLLM v0.25.1 + flashinfer-python)
 #
 # Unlocks vs E2-Safe (59.57):
 #   1. --mamba-backend=flashinfer  → native FlashInfer SSM kernels cho LFM2 hybrid layers
-#      (v0.23.0 boot-fail → v0.25.1 STABLE, auto-dispatch qua ssu_dispatch.py)
+#      (p2-fi image has flashinfer-python pre-installed via Dockerfile.p2fi)
 #   2. --mamba-cache-mode=align    → cache Mamba SSM state tại block boundaries
 #      (align với KV cache prefix caching, required chunked-prefill đã có)
 #      → shared 1000-token prefix được cache FULL (KV + SSM state)
@@ -14,7 +14,7 @@
 
 services:
   model:
-    image: longquanton/develarper-lfm25:p1-v25
+    image: longquanton/develarper-lfm25:p2-fi
     entrypoint:
       - python3
       - -m
