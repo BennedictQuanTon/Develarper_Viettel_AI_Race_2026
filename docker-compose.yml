@@ -1,4 +1,3 @@
-# E2-Safe (vLLM v0.25.1 Image) — Max ERS & 0% Boot Risk
 # Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p1-v25
 # Stack: FP8 Weights + FP8 KV Cache + Chunked Prefill (1024) + Prefix Caching
 
@@ -31,4 +30,4 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]
