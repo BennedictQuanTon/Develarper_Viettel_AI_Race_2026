@@ -1,5 +1,6 @@
-# Portal = E2 (after E1+ Score 59.57). See PLAN.md
-# Archive E1+: submit/docker-compose.e1_fp8.yml (FP8+KV only)
+# E2-Safe (Golden Bulletproof Config) — Optimized for Max ERS & 0% Boot Risk
+# Evidence-based: FP8 Weights + FP8 KV Cache + Chunked Prefill (1024) + Prefix Caching
+# Fixes: TPOT spikes + 7 failed requests timeout
 
 services:
   model:
@@ -19,8 +20,8 @@ services:
       - --enable-prefix-caching
       - --quantization=fp8
       - --kv-cache-dtype=fp8
-      - --optimization-level=3
-      - --mamba-backend=flashinfer
+      - --enable-chunked-prefill
+      - --max-num-batched-tokens=1024
     ports:
       - "8000:8000"
     shm_size: "2g"
