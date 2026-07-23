@@ -1,3 +1,4 @@
+# Mamba CUDA Backend (Failed) -> DO NOT SUBMIT
 services:
   model:
     image: asterios2707/develarper-agent:latest
@@ -9,15 +10,15 @@ services:
       - --model=/model 
       - --served-model-name=LFM2.5-1.2B-Instruct 
       - --host=0.0.0.0 
-      - --port=8000
-      - --quantization=fp8 # Online 8-bit Quantization
+      - --port=8000 
       - --dtype=bfloat16 # Use bfloat16 for model weights
       - --kv-cache-dtype=fp8 # Use fp8 for KV cache to save memory
       - --tensor-parallel-size=1 # Use 1 tensor parallel size, default 1, immutable after init
       - --enable-prefix-caching # Default True
       - --enable-chunked-prefill # Default True
       - --mamba-cache-mode=align # Important with enabled prefix caching
-      - --max-num-batched-tokens=2048 # Default
+      - --mamba-backend=CUDA # Failed
+      - --max-num-batched-tokens=2048 # Consider changing
       - --block-size=16 # Default, optimal
       - --gpu-memory-utilization=0.96 # Greedy ceiling cap
       - --max-model-len=8192 # Max sequence length
