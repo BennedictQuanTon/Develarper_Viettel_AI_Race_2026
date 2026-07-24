@@ -1,0 +1,38 @@
+# p5-sf8 — Yoshio #10 baseline image family + OFFLINE Static FP8 weights ONLY
+#
+# Delta vs :p2-fi (61.66 gold):
+#   /model = llm-compressor FP8_DYNAMIC checkpoint (compressed-tensors)
+#   same vLLM 0.25.1 + flashinfer
+#   NO OMP env pins (Z3-ENV 58.34 rejected)
+#   NO AOT warmup in this tag (single lever canary → target ERS 65–70 stretch)
+#
+# Build (GPU host for quant first):
+#   python3 scripts/quant_fp8.py --model model_weights/LFM2.5-1.2B-Instruct \
+#     --out model_weights/LFM2.5-1.2B-Instruct-FP8
+#   bash scripts/build_push_p5_sf8.sh
+#
+# NEVER overwrite :p0 / :p2-fi
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+FROM ${VLLM_IMAGE}
+
+RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
+
+# Offline FP8 weights (must exist in build context)
+COPY model_weights/LFM2.5-1.2B-Instruct-FP8 /model
+
+RUN test -f /model/config.json \
+    && python3 - <<'PY'
+from pathlib import Path
+p = Path("/model")
+sfts = list(p.glob("*.safetensors"))
+assert sfts, "no *.safetensors under /model"
+cfg = (p / "config.json").read_text()
+# Prefer compressed-tensors / quant config present; warn only if missing
+if "quantization_config" not in cfg and "compressed" not in cfg.lower():
+    print("WARN: config.json may lack quantization_config — verify quant_fp8.py output")
+print("ok weights:", [x.name for x in sfts[:5]], "bytes", sum(x.stat().st_size for x in sfts))
+PY
+
+EXPOSE 8000

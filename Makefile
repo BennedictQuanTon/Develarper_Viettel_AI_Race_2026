@@ -6,17 +6,21 @@ TAG        ?= p0
 PLATFORM   ?= linux/amd64
 VLLM_IMAGE ?= vllm/vllm-openai:v0.25.1
 
-.PHONY: help download-model preflight build build-baseline build-p2fi push tag-digest ers-sim smoke-mock submit-p0-compose
+.PHONY: help download-model preflight build build-baseline build-p2fi build-p5-sf8 push tag-digest ers-sim smoke-mock submit-p0-compose quant-fp8-dry
 
 help:
 	@echo "Targets:"
 	@echo "  make download-model   # HF -> model_weights/LFM2.5-1.2B-Instruct"
 	@echo "  make preflight        # local checks before push"
 	@echo "  make build            # docker buildx linux/amd64 with baked /model"
+	@echo "  make build-p2fi       # gold image family (online FP8 via compose)"
+	@echo "  make quant-fp8-dry    # dry-run offline FP8 recipe"
+	@echo "  make build-p5-sf8     # Static FP8 image (needs FP8 weights dir)"
 	@echo "  make push             # push $(IMAGE_REPO):$(TAG)"
 	@echo "  make ers-sim          # synthetic ERS ranking signal"
 	@echo "  make smoke-mock       # CPU OpenAI smoke"
 	@echo ""
+	@echo "Canary 65-70: bash scripts/prepare_and_submit_p5_sf8.sh  (GPU + Docker)"
 	@echo "Override: IMAGE_REPO=you/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.23.0"
 
 download-model:
@@ -61,6 +65,13 @@ build-p2fi:
 	  -t $(IMAGE_REPO):p2-fi \
 	  --load \
 	  .
+
+quant-fp8-dry:
+	python3 scripts/quant_fp8.py --dry-run
+
+# Requires model_weights/LFM2.5-1.2B-Instruct-FP8 from scripts/quant_fp8.py (GPU)
+build-p5-sf8:
+	bash scripts/build_push_p5_sf8.sh
 
 push:
 	docker push $(IMAGE_REPO):$(TAG)

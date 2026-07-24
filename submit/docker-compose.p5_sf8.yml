@@ -1,3 +1,13 @@
+# p5-sf8 SUBMIT — Yoshio #10 gold CLI + offline Static FP8 image
+# ONLY after: docker pull longquanton/develarper-lfm25:p5-sf8
+#
+# vs #10 (61.66):
+#   image :p2-fi → :p5-sf8
+#   REMOVE --quantization=fp8  (weights already compressed-tensors FP8)
+#   KEEP  kv-fp8, prefix, chunked bt=512, flashinfer, align, block32, maxlen 8192, mem 0.96
+#   NO environment OMP (Z3-ENV rejected 58.34)
+#   NO speculative / bt=256 / max-num-seqs
+
 services:
   model:
     image: longquanton/develarper-lfm25:p5-sf8

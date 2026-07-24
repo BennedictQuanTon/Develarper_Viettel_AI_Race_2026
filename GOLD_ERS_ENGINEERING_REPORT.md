@@ -1,83 +1,65 @@
-# GOLD ERS Report — sau Z3-ENV 58.34 · hướng gộp Static FP8 + AOT
-## Viettel AI Race 2026 · Team Develarper · 2026-07-25
+# Canary p5-sf8 — Yoshio #10 + Static FP8 only
+## Target band: 65–70 (expect trung vị ~64–66 nếu TBT xuống; 70 = stretch)
+
+**Baseline vàng:** Yoshio #10 · ERS **61.66** · TBT 4 · TTFT 48/70 · image `:p2-fi`  
+**Yếu tố mới (một đòn):** offline **FP8_DYNAMIC** (llm-compressor) bake vào `:p5-sf8`  
+**Cấm trong canary này:** OMP env · AOT gộp · bt=256 · speculative
 
 ---
 
-## Kết quả vừa rồi
+## Khác #10 chỗ nào?
 
-| | Yoshio #10 | Z3-ENV |
+| | #10 gold | p5-sf8 |
 |---|---|---|
-| ERS | **61.66** | **58.34** |
-| TBT | 4 ms | 4 ms |
-| TTFT p50/p95 | 48/70 | 56/88 |
-
-→ **Cấm** OMP/TOKENIZERS env pin. Compose vàng = pure #10 trên `:p2-fi`.
+| Image | `:p2-fi` (BF16 trong `/model`, online `--quantization=fp8`) | `:p5-sf8` (FP8 checkpoint trong `/model`) |
+| `--quantization=fp8` | Có | **Bỏ** (đã nén sẵn) |
+| Còn lại CLI | flashinfer+align+bt512+block32+8192+mem0.96+kv-fp8 | **Giữ nguyên** |
 
 ---
 
-## Plan đang làm: **một tag gộp hai hướng** = `p6-sf8-aot`
-
-Bạn chọn **hai hướng một lúc** → một image / một lần nộp:
-
-| Trong image | Mục tiêu metric |
-|---|---|
-| **Static FP8** (`llm-compressor` FP8_DYNAMIC → `/model`) | Hạ **TBT** dưới 4ms |
-| **AOT warmup** (Triton/vLLM cache bake lúc build) | Ổn **TTFT** / bớt cold-start |
-
-**Rủi ro gộp:** nếu điểm tụt, không biết cái nào hại → lần sau tách `p5-sf8` và `p4-aot`.
-
-**Đúng luật:** quant + CUDA graphs được phép; không dual-path; tag mới không đè `:p2-fi`.
-
----
-
-## Việc phải làm (máy **có GPU** + Docker)
-
-Máy Mac hiện tại: **Docker down + không GPU** → chưa build/push được tại chỗ. Làm trên VM CUDA (cloud):
+## Lệnh triển khai (máy có GPU + Docker)
 
 ```bash
-# 1) Quant offline
+# Hub login + Docker up trước
 pip install llmcompressor transformers
+
+# All-in-one: quant → build → push → copy compose
+bash scripts/prepare_and_submit_p5_sf8.sh
+
+# Hoặc tách bước:
 python3 scripts/quant_fp8.py \
   --model model_weights/LFM2.5-1.2B-Instruct \
   --out model_weights/LFM2.5-1.2B-Instruct-FP8
-
-# 2) Build + push (AOT bật; cần GPU lúc docker build)
-chmod +x scripts/build_push_p6_combo.sh scripts/warmup_aot_cache.sh
-ENABLE_AOT=1 bash scripts/build_push_p6_combo.sh
-
-# Nếu build host không GPU cho AOT:
-# ENABLE_AOT=0 bash scripts/build_push_p6_combo.sh   # chỉ static FP8
-
-# 3) Verify pull rồi nộp
-docker pull longquanton/develarper-lfm25:p6-sf8-aot
-cp submit/docker-compose.p6_combo.yml docker-compose.yml
-# upload docker-compose.yml lên Portal
+bash scripts/build_push_p5_sf8.sh
+docker pull longquanton/develarper-lfm25:p5-sf8
+cp submit/docker-compose.p5_sf8.yml docker-compose.yml
+# Upload docker-compose.yml lên Portal
 ```
 
-### Compose khác #10 chỗ nào?
-- Image → `:p6-sf8-aot`
-- **Bỏ** `--quantization=fp8` (weights đã compressed-tensors)
-- Giữ kv-fp8, flashinfer, align, bt=512, block32, maxlen 8192, mem 0.96
-- **Không** `environment:` OMP
+**Máy Mac không GPU:** chỉ dry-run được (`python3 scripts/quant_fp8.py --dry-run`). Quant thật + build phải trên VM CUDA.
 
 ---
 
-## File mới
+## Gate đọc điểm Portal
 
-| File | Vai trò |
+| tbt_median_ms | Expect ERS |
 |---|---|
-| `scripts/quant_fp8.py` | Offline FP8 |
-| `scripts/warmup_aot_cache.sh` | Warmup cache |
-| `Dockerfile.p6_combo` | Image gộp |
-| `scripts/build_push_p6_combo.sh` | Build/push |
-| `submit/docker-compose.p6_combo.yml` | File nộp sau khi Hub có image |
-| `docker-compose.yml` | Vẫn pure #10 (an toàn) cho đến khi p6 sẵn sàng |
+| vẫn **4** | ~61–63 (hòa #10) |
+| **≤ 3.5** | **~65–67** ← mục tiêu chính |
+| **≤ 3.0** | cửa **~70** |
+| TTFT p95 ≫ 70 | nghi boot/quant sai path — so với #10 |
 
 ---
 
-## Thẻ cấm
+## File
 
-```text
-CẤM: OMP env pin | bt=256 | seqs=80 | speculative | đè :p2-fi
-NỘP p6: chỉ khi docker pull :p6-sf8-aot OK
-```
+| Path | Role |
+|---|---|
+| `Dockerfile.p5_sf8` | Image static FP8 |
+| `scripts/quant_fp8.py` | Offline quant |
+| `scripts/build_push_p5_sf8.sh` | Build/push |
+| `scripts/prepare_and_submit_p5_sf8.sh` | Full pipeline |
+| `submit/docker-compose.p5_sf8.yml` | Compose nộp |
+| `docker-compose.yml` | Giữ pure #10 until bạn `cp` sau push |
+
+`p6` combo (SF8+AOT) giữ trong repo nhưng **không** dùng cho canary này.

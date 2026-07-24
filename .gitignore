@@ -9,6 +9,7 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .venv/
+.venv-p5/
 venv/
 .env
 .env.local
