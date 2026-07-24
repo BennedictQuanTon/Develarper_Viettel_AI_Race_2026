@@ -11,7 +11,7 @@
 #
 # Runtime must be offline (weights already in /model).
 
-ARG VLLM_IMAGE=vllm/vllm-openai:v0.23.0
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.0
 FROM ${VLLM_IMAGE}
 
 # Expect local bake path produced by: scripts/download_model.sh
