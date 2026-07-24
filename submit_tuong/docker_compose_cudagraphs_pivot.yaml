@@ -1,0 +1,50 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Pivot submission: CUDA Graphs config-only (Gate 2 FAIL cho Triton)
+# Image     : asterios2707/develarper-agent:opt-platform-v1  (cùng image, khác flags)
+# Chiến lược: giữ nguyên Yoshio SOTA + ép capture CUDA graphs qua compilation-config.
+#             KHÔNG bật platform payload (DEVELARPER_PAYLOADS="").
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  model:
+    image: asterios2707/develarper-agent:opt-platform-v1
+    entrypoint:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+    command:
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
+      - --port=8000
+      - --quantization=fp8
+      - --dtype=bfloat16
+      - --kv-cache-dtype=fp8
+      - --tensor-parallel-size=1
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --mamba-cache-mode=align
+      - --mamba-backend=flashinfer
+      - --max-num-batched-tokens=512
+      - --block-size=32
+      - --gpu-memory-utilization=0.96
+      - --max-model-len=8192
+      - --max-num-seqs=256
+      # ─── Pivot: force CUDA graph capture ──────────────────────────
+      - --compilation-config={"cudagraph_capture_sizes":[1,2,4,8,16,32,64,128]}
+    environment:
+      - ENABLE_DEVELARPER_OPT=0
+      - DEVELARPER_PAYLOADS=
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - VLLM_ATTENTION_BACKEND=FLASHINFER
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    ports:
+      - "8000:8000"
+    shm_size: "2g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

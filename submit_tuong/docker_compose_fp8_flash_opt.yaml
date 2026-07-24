@@ -1,0 +1,61 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Submission: fp8_flash_opt  (base = Yoshio fp8_flash 61.66 pts + patch platform)
+# Image     : asterios2707/develarper-agent:opt-platform-v1
+# Entrypoint: python3 -m vllm.entrypoints.openai.api_server   (BTC locked, KHÔNG đổi)
+#
+# Payload    | Default | Kill-switch ENV
+# ──────────┼─────────┼──────────────────────────────────────────
+# p01_rmsnorm | ON    | DEVELARPER_PAYLOADS=""                (tắt hết)
+# p02_silu    | OFF   | DEVELARPER_PAYLOADS="p01_fused_rmsnorm,p02_fused_silu_mul"
+# p03_cudagr  | OFF   | (pivot config-only — dùng file khác)
+#
+# Fail-open: mọi patch lỗi → log SKIPPED và giữ forward gốc của vLLM.
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  model:
+    image: asterios2707/develarper-agent:opt-platform-v1
+    entrypoint:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+    command:
+      # ─── LOCKED (BTC) ────────────────────────────────────────────
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
+      - --port=8000
+      # ─── SOTA flags (giống Yoshio fp8_flash) ─────────────────────
+      - --quantization=fp8
+      - --dtype=bfloat16
+      - --kv-cache-dtype=fp8
+      - --tensor-parallel-size=1
+      - --enable-prefix-caching
+      - --enable-chunked-prefill
+      - --mamba-cache-mode=align
+      - --mamba-backend=flashinfer
+      - --max-num-batched-tokens=512
+      - --block-size=32
+      - --gpu-memory-utilization=0.96
+      - --max-model-len=8192
+      - --max-num-seqs=256
+    environment:
+      # ─── Patch platform runtime ───────────────────────────────────
+      - ENABLE_DEVELARPER_OPT=1
+      - DEVELARPER_PAYLOADS=p01_fused_rmsnorm
+      - DEVELARPER_STRICT=0
+      - DEVELARPER_LOG_LEVEL=INFO
+      # ─── Env carry-over từ Yoshio Dockerfile ─────────────────────
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - VLLM_ATTENTION_BACKEND=FLASHINFER
+      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+    ports:
+      - "8000:8000"
+    shm_size: "2g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
