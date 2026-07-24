@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.6
+# ─────────────────────────────────────────────────────────────────────────────
+# Develarper AI Race 2026 — opt-platform image (base = Yoshio fp8_flash).
+#
+# Layers on top of the Yoshio SOTA image:
+#   1. develarper_opt/ package (platform + kernels + payloads)
+#   2. sitecustomize.py placed on Python's site path -> auto-loaded before
+#      vLLM entrypoint runs -> monkey-patches applied lazily.
+#   3. Environment defaults: master switch ON, only p01 enabled.
+#
+# Build:
+#   docker build -f Dockerfile.opt_platform \
+#     -t asterios2707/develarper-agent:opt-platform-v1 .
+#
+# The base image already carries the LFM2.5 weights at /model.
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG BASE_IMAGE=asterios2707/develarper-agent:latest
+FROM ${BASE_IMAGE}
+
+ENV OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    VLLM_ATTENTION_BACKEND=FLASHINFER \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ENABLE_DEVELARPER_OPT=1 \
+    DEVELARPER_PAYLOADS=p01_fused_rmsnorm \
+    DEVELARPER_STRICT=0 \
+    DEVELARPER_LOG_LEVEL=INFO
+
+WORKDIR /workspace
+
+COPY develarper_opt/ /workspace/develarper_opt/
+
+ENV PYTHONPATH="/workspace:${PYTHONPATH}"
+
+# Register the sitecustomize hook on Python's default site path so it runs
+# before `python -m vllm.entrypoints.openai.api_server`.
+RUN SITE_PKGS="$(python3 -c 'import site,sys;print(site.getsitepackages()[0])')" \
+ && cp /workspace/develarper_opt/sitecustomize.py "${SITE_PKGS}/sitecustomize.py" \
+ && echo "sitecustomize installed at ${SITE_PKGS}/sitecustomize.py"
+
+# Build-time sanity: fail the image build if any payload has a syntax error
+# or missing import. Does NOT apply patches (vLLM not initialised yet).
+RUN python3 -c "from develarper_opt.platform.registry import dry_run; dry_run()"
+
+# Optional Triton pre-warm: emit a Triton version banner so we know the JIT
+# is available in the image. Any failure here is non-fatal.
+RUN python3 -c "import triton; print(f'Triton {triton.__version__} available')" \
+    || echo "WARNING: Triton not importable in base image (payload will fail-open)."
+
+EXPOSE 8000
