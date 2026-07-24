@@ -1,6 +1,6 @@
 # Base: vllm/vllm-openai:v0.25.1 + flashinfer-python | Image: longquanton/develarper-lfm25:p2-fi
-# Stack: Z2 Golden Config Pro — FP8 + FP8 KV + Chunked (256) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192
-# Target ERS: ~68-74 | Proven best: 61.66 (Yoshio #10, block32, maxlen 8192, mem 0.96)
+# Stack: Restored Yoshio #10 Proven Stack — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192
+# Restores TTFT p50 48ms / p95 70ms (Target >61.66)
 
 services:
   model:
@@ -21,11 +21,10 @@ services:
       - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --max-num-batched-tokens=256
+      - --max-num-batched-tokens=512
       - --block-size=32
       - --mamba-backend=flashinfer
       - --mamba-cache-mode=align
-      - --max-num-seqs=80
     ports:
       - "8000:8000"
     shm_size: "2g"
@@ -36,5 +35,6 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+
 
 

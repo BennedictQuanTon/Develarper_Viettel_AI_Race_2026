@@ -1,6 +1,6 @@
 # Base: vllm/vllm-openai:v0.25.1 + FlashInfer + CPU Thread Pinning | Image: longquanton/develarper-lfm25:p3-aot
-# Stack: Z3 FlashMamba Pro — FP8 + FP8 KV + Chunked (256) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192 + CPU Taskset ENVs
-# Target ERS: ~74-80 | Includes OMP/OpenBLAS/MKL thread pinning to eliminate 3 vCPU GIL contention
+# Stack: Z3 FlashMamba Pro — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192 + CPU Taskset ENVs
+# Target ERS: ~65-72+ | Includes OMP/OpenBLAS/MKL thread pinning to eliminate 3 vCPU GIL contention
 
 services:
   model:
@@ -21,11 +21,10 @@ services:
       - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --max-num-batched-tokens=256
+      - --max-num-batched-tokens=512
       - --block-size=32
       - --mamba-backend=flashinfer
       - --mamba-cache-mode=align
-      - --max-num-seqs=80
     ports:
       - "8000:8000"
     shm_size: "2g"
@@ -36,3 +35,4 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+
