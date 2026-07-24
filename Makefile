@@ -4,7 +4,7 @@
 IMAGE_REPO ?= YOUR_DOCKERHUB/develarper-lfm25
 TAG        ?= p0
 PLATFORM   ?= linux/amd64
-VLLM_IMAGE ?= vllm/vllm-openai:v0.23.0
+VLLM_IMAGE ?= vllm/vllm-openai:v0.25.1
 
 .PHONY: help download-model preflight build build-baseline push tag-digest ers-sim smoke-mock submit-p0-compose
 
@@ -17,7 +17,7 @@ help:
 	@echo "  make ers-sim          # synthetic ERS ranking signal"
 	@echo "  make smoke-mock       # CPU OpenAI smoke"
 	@echo ""
-	@echo "Override: IMAGE_REPO=you/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.23.0"
+	@echo "Override: IMAGE_REPO=you/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.25.1"
 
 download-model:
 	bash scripts/download_model.sh

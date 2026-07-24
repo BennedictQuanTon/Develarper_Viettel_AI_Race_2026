@@ -1,0 +1,53 @@
+# syntax=docker/dockerfile:1.6
+# ─────────────────────────────────────────────────────────────────────────────
+# Tuong submission image — self-contained, vLLM 0.25.1 (same as Yoshio fp8_flash).
+#
+# Stack:
+#   vllm/vllm-openai:v0.25.1
+#   + flashinfer-python (required for --mamba-backend=flashinfer)
+#   + LFM2.5 weights baked at /model
+#   + develarper_opt patch platform (sitecustomize + p01 RMSNorm)
+#
+# Build (from repo root, after make download-model):
+#   docker build --platform linux/amd64 -f Dockerfile.tuong \
+#     -t <YOUR_DOCKERHUB>/develarper-lfm25:tuong-opt-v1 .
+#
+# Push:
+#   docker push <YOUR_DOCKERHUB>/develarper-lfm25:tuong-opt-v1
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+FROM ${VLLM_IMAGE}
+
+ENV OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    VLLM_ATTENTION_BACKEND=FLASHINFER \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ENABLE_DEVELARPER_OPT=1 \
+    DEVELARPER_PAYLOADS=p01_fused_rmsnorm \
+    DEVELARPER_STRICT=0 \
+    DEVELARPER_LOG_LEVEL=INFO
+
+# flashinfer-python — required for --mamba-backend=flashinfer on LFM2.5 hybrid layers
+RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
+
+# Bake competition weights (offline runtime — no HF download at serve time)
+COPY model_weights/LFM2.5-1.2B-Instruct /model
+RUN test -f /model/config.json && ls -lah /model | head
+
+WORKDIR /workspace
+COPY develarper_opt/ /workspace/develarper_opt/
+ENV PYTHONPATH="/workspace:${PYTHONPATH}"
+
+RUN SITE_PKGS="$(python3 -c 'import site; print(site.getsitepackages()[0])')" \
+    && cp /workspace/develarper_opt/sitecustomize.py "${SITE_PKGS}/sitecustomize.py" \
+    && echo "sitecustomize installed at ${SITE_PKGS}/sitecustomize.py"
+
+RUN python3 -c "from develarper_opt.platform.registry import dry_run; dry_run()"
+RUN python3 -c "import triton; print(f'Triton {triton.__version__} available')" \
+    || echo "WARNING: Triton not importable (payload will fail-open)."
+
+EXPOSE 8000
