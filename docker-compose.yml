@@ -1,10 +1,14 @@
-# Base: vllm/vllm-openai:v0.25.1 + flashinfer-python | Image: longquanton/develarper-lfm25:p2-fi
-# Stack: Restored Yoshio #10 Proven Stack — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192
-# Restores TTFT p50 48ms / p95 70ms (Target >61.66)
-
 services:
   model:
     image: longquanton/develarper-lfm25:p2-fi
+    environment:
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - VECLIB_MAXIMUM_THREADS=1
+      - NUMEXPR_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
+      - VLLM_LOGGING_LEVEL=WARN
     entrypoint:
       - python3
       - -m
@@ -34,7 +38,4 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [ gpu ]
-
-
-
+              capabilities: [gpu]
