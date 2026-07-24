@@ -1,32 +1,38 @@
-# p3-aot image — vLLM v0.25.1 + FlashInfer + CPU Thread Pinning + LFM2.5 weights
+# p3-aot — vLLM v0.25.1 + FlashInfer + baked CPU/tokenizer pins + LFM2.5 weights
 #
-# WHY: 
-#   1. Pin OMP/OpenBLAS/MKL threads to 1 to prevent CPU thread thrashing on 3 vCPUs.
-#   2. FlashInfer SSM native backend pre-installed.
-#   3. Clean environment without GIL thrashing.
+# PURPOSE (Phase B in GOLD_ERS_ENGINEERING_REPORT.md):
+#   Same runtime as :p2-fi, plus process ENV pins baked into the image so Portal
+#   does not depend on compose `environment:` being honored.
 #
-# Build:
+# HONEST SCOPE:
+#   This is NOT Triton/CUDA-graph AOT cache bake. True AOT = later tag (Phase C).
+#
+# RULES:
+#   - New tag only. NEVER overwrite :p0 or :p2-fi after Portal use.
+#   - Serve stack must keep Yoshio #10 gold CLI (see report §2.4).
+#
+# Build / push:
 #   bash scripts/build_push_p3aot.sh
 
 ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
 FROM ${VLLM_IMAGE}
 
-# Install flashinfer-python — required for --mamba-backend=flashinfer
+# Required for --mamba-backend=flashinfer
 RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
     && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
 
-# Pin math libraries to 1 thread per process to prevent 3 vCPU core contention
+# Pin math + tokenizer threads: 3 vCPU / 1 worker (Admin) + full-history retokenize
 ENV OMP_NUM_THREADS=1 \
     OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
     VECLIB_MAXIMUM_THREADS=1 \
     NUMEXPR_NUM_THREADS=1 \
+    TOKENIZERS_PARALLELISM=false \
     VLLM_LOGGING_LEVEL=WARN
 
-# Bake weights (offline runtime, no HF at serve time)
+# Offline runtime — no Hugging Face at serve time (anti-cheat / reliability)
 COPY model_weights/LFM2.5-1.2B-Instruct /model
 
-# Sanity: fail build early if config missing
 RUN test -f /model/config.json && ls -lah /model | head
 
 EXPOSE 8000

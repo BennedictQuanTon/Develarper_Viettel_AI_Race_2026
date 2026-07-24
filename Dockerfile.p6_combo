@@ -1,0 +1,44 @@
+# p6-sf8-aot — COMBINED: offline FP8 weights + FlashInfer + optional AOT warmup caches
+#
+# WHY (after Z3-ENV 58.34 rejected OMP pin):
+#   1) Static/channel FP8 via llm-compressor → attack TBT stuck at 4ms
+#   2) Warmup bake Triton/vLLM caches → attack TTFT cold-start
+#
+# RISK: one Portal submit = two levers; if ERS drops, split into p5 / p4 next.
+#
+# PREREQ before docker build:
+#   1. GPU machine: python3 scripts/quant_fp8.py --model model_weights/LFM2.5-1.2B-Instruct \
+#        --out model_weights/LFM2.5-1.2B-Instruct-FP8
+#   2. Docker Desktop up, Hub login
+#   3. bash scripts/build_push_p6_combo.sh
+#
+# NEVER overwrite :p0 / :p2-fi
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+ARG ENABLE_AOT=1
+FROM ${VLLM_IMAGE}
+
+RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
+
+# Offline FP8 compressed-tensors checkpoint (must exist on build context)
+COPY model_weights/LFM2.5-1.2B-Instruct-FP8 /model
+
+RUN test -f /model/config.json \
+    && (test -f /model/model.safetensors -o -f /model/model-00001-of-00001.safetensors \
+        -o -n "$(ls /model/*.safetensors 2>/dev/null | head -1)") \
+    && ls -lah /model | head
+
+# Optional AOT: only works when build has NVIDIA GPU (--gpus all / buildkit gpu)
+# If build host has no GPU, set --build-arg ENABLE_AOT=0
+COPY scripts/warmup_aot_cache.sh /tmp/warmup_aot_cache.sh
+RUN chmod +x /tmp/warmup_aot_cache.sh \
+    && if [ "${ENABLE_AOT}" = "1" ]; then \
+         echo "[build] ENABLE_AOT=1 — attempting warmup (requires GPU)"; \
+         MODEL_PATH=/model bash /tmp/warmup_aot_cache.sh || \
+           (echo "[build] AOT warmup failed — refuse silent ship"; exit 1); \
+       else \
+         echo "[build] ENABLE_AOT=0 — skip warmup (SF8-only image)"; \
+       fi
+
+EXPOSE 8000

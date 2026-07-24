@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # =============================================================================
-# BUILD & PUSH p3-aot image (Advanced CPU Thread Pinning + FlashInfer)
-# Chạy script này trong Terminal:
-#   cd /Users/davark/Downloads/UTS/Github/Develarper_Viettel_AI_Race_2026
+# BUILD & PUSH p3-aot (Phase B) — CPU/tokenizer ENV baked + FlashInfer
+# Playbook: GOLD_ERS_ENGINEERING_REPORT.md
+#
+# Gate before Portal switch:
+#   docker pull longquanton/develarper-lfm25:p3-aot   # must succeed (public)
+#   then: cp submit/docker-compose.p3_aot.yml docker-compose.yml
+#
 #   bash scripts/build_push_p3aot.sh
 # =============================================================================
 set -euo pipefail
@@ -67,6 +71,9 @@ docker run --rm "${FULL_IMAGE}" python3 -c "
 import flashinfer, os
 print('  ✅ flashinfer ok:', flashinfer.__version__)
 print('  ✅ OMP_NUM_THREADS:', os.environ.get('OMP_NUM_THREADS'))
+print('  ✅ TOKENIZERS_PARALLELISM:', os.environ.get('TOKENIZERS_PARALLELISM'))
+assert os.environ.get('OMP_NUM_THREADS') == '1'
+assert os.environ.get('TOKENIZERS_PARALLELISM') == 'false'
 " 2>&1 || {
   echo "  ⚠️  Verification failed — check build logs above"
   exit 1

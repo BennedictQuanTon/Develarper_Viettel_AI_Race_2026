@@ -1,14 +1,11 @@
+# REJECTED — Phase A ENV pin (2026-07-25) · ERS 58.34 < Yoshio #10 61.66
+# Evidence: TBT vẫn 4ms (env KHÔNG giúp decode); TTFT p50 48→56, p95 70→88
+# Action: REVERT pure Yoshio #10 — zero environment block
+# Next upside ≠ OMP pin / ≠ same p3-aot ENV bake (sẽ lặp fail này)
+
 services:
   model:
     image: longquanton/develarper-lfm25:p2-fi
-    environment:
-      - OMP_NUM_THREADS=1
-      - OPENBLAS_NUM_THREADS=1
-      - MKL_NUM_THREADS=1
-      - VECLIB_MAXIMUM_THREADS=1
-      - NUMEXPR_NUM_THREADS=1
-      - TOKENIZERS_PARALLELISM=false
-      - VLLM_LOGGING_LEVEL=WARN
     entrypoint:
       - python3
       - -m
@@ -38,4 +35,4 @@ services:
           devices:
             - driver: nvidia
               count: 1
-              capabilities: [gpu]
+              capabilities: [ gpu ]

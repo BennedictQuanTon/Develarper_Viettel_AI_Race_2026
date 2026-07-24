@@ -1,12 +1,15 @@
-# Phase B template — ONLY use after: docker pull longquanton/develarper-lfm25:p3-aot succeeds
-# Playbook: GOLD_ERS_ENGINEERING_REPORT.md
+# COMBINED submit — image :p6-sf8-aot (static FP8 weights + AOT caches if baked)
+# ONLY after: docker pull longquanton/develarper-lfm25:p6-sf8-aot
 #
-# Delta vs Yoshio #10: image tag only (CPU/tokenizer ENV baked in Dockerfile.p3aot).
-# CLI is FROZEN gold — do not add bt/seqs/speculative/boolean=true/unknown flags.
+# CLI ≈ Yoshio #10 but:
+#   - NO --quantization=fp8  → checkpoint is already compressed-tensors FP8
+#   - keep kv-fp8 + flashinfer + align + bt=512 + block32 + maxlen 8192
+#   - NO environment OMP pin (Z3-ENV 58.34 rejected)
+#   - NO speculative / bt=256 / max-num-seqs
 
 services:
   model:
-    image: longquanton/develarper-lfm25:p3-aot
+    image: longquanton/develarper-lfm25:p6-sf8-aot
     entrypoint:
       - python3
       - -m
@@ -20,7 +23,6 @@ services:
       - --gpu-memory-utilization=0.96
       - --tensor-parallel-size=1
       - --enable-prefix-caching
-      - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
       - --max-num-batched-tokens=512

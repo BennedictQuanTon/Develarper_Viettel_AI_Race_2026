@@ -9,12 +9,14 @@
 | **E2-Safe** | **59.57** | **4** | 53ms / 72ms | 5 | Y ERS | v0.25.1 + FP8 + Chunked 1024 (Giảm 2 fails). |
 | **Z1 FlashMamba** | **61.18** | **4** | **48ms / 68ms** | **4** | Y ERS | Image `p2-fi` + FlashInfer SSM + Align + bt=512. |
 | **#10 Yoshio** | **61.66** | **4** | **48ms / 70ms** | **5** | Y ERS | 🏆 **TOP 1 TEAM:** FlashInfer + Align + Block32 + MaxLen 8192 + Mem 0.96. |
-| Z2 Pro (15:20) | 56.44 | 4 | 58ms / 137ms | 5 | N | ⚠️ `bt=256` làm TTFT p95 tăng vọt lên 137ms (+95.7%) làm giảm điểm! |
-| **Z3 Pro (Target)** | **~75-82** | **<2** | **~45ms / 65ms** | **0-1** | Y ERS | Image `p3-aot` + CPU Thread Pinning ENVs (OMP/MKL/OpenBLAS=1). |
+| Z2 Pro (15:20) | 56.44 | 4 | 58ms / 137ms | 5 | N | `bt=256` + seqs=80 → TTFT p95 137ms. |
+| **Z3-ENV (mới)** | **58.34** | **4** | **56ms / 88ms** | **5** | **N** | `#10` + OMP/MKL/TOKENIZERS env. **TBT không đổi**; TTFT xấu hơn → −3.32 điểm. **CẤM lặp ENV pin / p3-aot cùng ENV.** |
 
 ---
 
-### 📌 Bài Học Rút Ra Từ Lần Nộp Z2 Pro (15:20 — 56.44):
-1. **Không hạ `max-num-batched-tokens` xuống 256:** Việc hạ `bt=256` làm Turn 1 prefill (2.150 tokens) bị chia thành 9 chunks thay vì 4 chunks (`bt=512`), gây quá tải scheduler làm TTFT p95 tăng vọt từ 70ms lên 137ms (+95.7%).
-2. **Khôi phục `bt=512`:** Bắt buộc giữ `bt=512` để bảo vệ TTFT p50 = 48ms / p95 = 70ms.
-3. **Giải quyết TBT bằng Image `:p3-aot`:** Giữ cờ `bt=512` và giải quyết thắt cổ chai CPU bằng bộ biến môi trường CPU Thread Pinning trong Image `:p3-aot`.
+### Bài học Z3-ENV (58.34)
+1. CPU thread pin (`OMP=1`, `TOKENIZERS_PARALLELISM=false`, …) **không** hạ TBT (vẫn 4ms).
+2. Làm TTFT chậm hơn (p50 +8ms, p95 +18ms) → ERS tụt 61.66 → 58.34.
+3. **Không** build/nộp `p3-aot` nếu chỉ bake cùng bộ ENV — sẽ lặp kết quả này.
+4. Khôi phục compose = **pure Yoshio #10** (không `environment:`).
+5. Muốn phá trần 4ms TBT → phải đổi **đường GPU decode** (static FP8 / AOT graph / kernel), không phải OMP pin.
