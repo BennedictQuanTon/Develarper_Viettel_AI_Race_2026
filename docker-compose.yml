@@ -1,10 +1,6 @@
-# Base: vllm/vllm-openai:v0.25.1 | Image: longquanton/develarper-lfm25:p2-fi
-# Stack: Z1 FlashMamba — FP8 + FP8 KV + Chunked (512) + Prefix + FlashInfer Mamba + Mamba Cache Align
-# Target ERS: ~78-83 | Previous best: 59.57 (E2-Safe, bt=1024, no flashinfer)
-# Key unlocks vs E2-Safe:
-#   --mamba-backend=flashinfer  → native SSM kernel (p2-fi has flashinfer-python pre-installed)
-#   --mamba-cache-mode=align    → cache Mamba SSM state at block boundaries (shared 1000-tok prefix)
-#   --max-num-batched-tokens=512 → decode xen kẽ dày hơn → TBT 4ms → ~2ms
+# Base: vllm/vllm-openai:v0.25.1 + flashinfer-python | Image: longquanton/develarper-lfm25:p2-fi
+# Stack: Z2 Golden Config Pro — FP8 + FP8 KV + Chunked (256) + Prefix + FlashInfer Mamba + Align + Block32 + MaxLen 8192
+# Target ERS: ~68-74 | Proven best: 61.66 (Yoshio #10, block32, maxlen 8192, mem 0.96)
 
 services:
   model:
@@ -18,16 +14,18 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct
       - --host=0.0.0.0
       - --port=8000
-      - --max-model-len=32768
-      - --gpu-memory-utilization=0.95
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.96
       - --tensor-parallel-size=1
       - --enable-prefix-caching
       - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=256
+      - --block-size=32
       - --mamba-backend=flashinfer
       - --mamba-cache-mode=align
+      - --max-num-seqs=80
     ports:
       - "8000:8000"
     shm_size: "2g"
@@ -38,3 +36,5 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [ gpu ]
+
+
