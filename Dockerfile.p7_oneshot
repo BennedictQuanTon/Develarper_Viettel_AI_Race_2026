@@ -1,0 +1,21 @@
+# p7-oneshot image — vLLM v0.26.0 + flashinfer-python + LFM2.5 weights
+#
+# WHY:
+# 1) vLLM v0.26.0 base is ALREADY downloaded & cached on local disk.
+# 2) vLLM v0.26.0 natively bundles optimized Mamba & short-conv operators.
+# 3) flashinfer-python handles Mamba SSM state cache alignment.
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.26.0
+FROM ${VLLM_IMAGE}
+
+# Install flashinfer-python (pre-compiled wheel)
+RUN pip install --no-cache-dir "flashinfer-python>=0.6.4" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)"
+
+# Bake weights (offline runtime, no HF download at serve time)
+COPY model_weights/LFM2.5-1.2B-Instruct /model
+
+# Sanity check
+RUN test -f /model/config.json && ls -lah /model | head
+
+EXPOSE 8000

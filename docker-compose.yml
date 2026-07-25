@@ -1,6 +1,6 @@
 services:
   model:
-    image: longquanton/develarper-lfm25:p5-sf8
+    image: longquanton/develarper-lfm25:p7-oneshot
     entrypoint:
       - python3
       - -m
@@ -14,9 +14,11 @@ services:
       - --gpu-memory-utilization=0.96
       - --tensor-parallel-size=1
       - --enable-prefix-caching
+      - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=768
+      - --max-num-seqs=128
       - --block-size=32
       - --mamba-backend=flashinfer
       - --mamba-cache-mode=align
