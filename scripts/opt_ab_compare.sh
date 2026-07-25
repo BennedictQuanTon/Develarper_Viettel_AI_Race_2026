@@ -4,7 +4,7 @@
 set -euo pipefail
 
 A_COMPOSE="${A_COMPOSE:-submit_yoshio/docker_compose_fp8_flash.yaml}"
-B_COMPOSE="${B_COMPOSE:-submit_tuong/docker_compose_fp8_flash_opt.yaml}"
+B_COMPOSE="${B_COMPOSE:-submit/docker-compose.yml}"
 
 echo "═════════════════════════════════════════════════════════"
 echo " A (baseline)  : ${A_COMPOSE}"

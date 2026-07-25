@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
-# Patch image: field across submit compose files after Hub push.
-# Usage: ./scripts/set_image.sh myuser/develarper-lfm25:p0
+# Patch image: field across Tuong submit compose files after Hub push.
+# Usage: ./scripts/set_image.sh nakituonghuynh/develarper-lfm25:tuong-opt-v1
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${1:-}"
 if [[ -z "${IMAGE}" ]]; then
-  echo "Usage: $0 <dockerhub/repo:tag-or-digest>"
+  echo "Usage: $0 <dockerhub/repo:tag>"
   exit 1
 fi
 
 files=(
   "${ROOT}/docker-compose.yml"
-  "${ROOT}/submit/docker-compose.a1_mem90.yml"
-  "${ROOT}/submit/docker-compose.a2_chunked.yml"
-  "${ROOT}/submit/docker-compose.b1_fp8.yml"
-  "${ROOT}/submit/docker-compose.b2_kvfp8.yml"
+  "${ROOT}/submit/docker-compose.yml"
+  "${ROOT}/submit/docker-compose.tuong_cudagraphs_pivot.yml"
 )
 
 for f in "${files[@]}"; do
-  # Replace any image: line under services.model
   python3 - <<PY
 from pathlib import Path
 p = Path("${f}")
@@ -35,4 +32,4 @@ print("updated", p)
 PY
 done
 
-echo "Done. Upload docker-compose.yml to Portal for P0."
+echo "Done. Upload submit/docker-compose.yml to Portal."

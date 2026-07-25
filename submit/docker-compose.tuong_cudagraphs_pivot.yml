@@ -1,12 +1,9 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# Pivot submission: CUDA Graphs config-only (Gate 2 FAIL cho Triton)
-# Image     : asterios2707/develarper-agent:opt-platform-v1  (cùng image, khác flags)
-# Chiến lược: giữ nguyên Yoshio SOTA + ép capture CUDA graphs qua compilation-config.
-#             KHÔNG bật platform payload (DEVELARPER_PAYLOADS="").
-# ─────────────────────────────────────────────────────────────────────────────
+# Tuong T2 — CUDA Graphs pivot (config-only, platform OFF)
+# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+
 services:
   model:
-    image: asterios2707/develarper-agent:opt-platform-v1
+    image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
     entrypoint:
       - python3
       - -m
@@ -29,7 +26,6 @@ services:
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
       - --max-num-seqs=256
-      # ─── Pivot: force CUDA graph capture ──────────────────────────
       - --compilation-config={"cudagraph_capture_sizes":[1,2,4,8,16,32,64,128]}
     environment:
       - ENABLE_DEVELARPER_OPT=0

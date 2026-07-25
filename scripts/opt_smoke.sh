@@ -6,7 +6,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-COMPOSE_FILE="${1:-submit_tuong/docker_compose_fp8_flash_opt.yaml}"
+COMPOSE_FILE="${1:-submit/docker-compose.yml}"
 N_REQUESTS="${N_REQUESTS:-20}"
 MAX_TOKENS="${MAX_TOKENS:-64}"
 PROMPT="${PROMPT:-Explain paged attention in one paragraph.}"

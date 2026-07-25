@@ -1,4 +1,7 @@
-# Root compose = mirror of submit/docker-compose.yml (local dev / preflight)
+# Portal upload — Tuong T1 (fp8_flash + opt-platform p01)
+# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+# Upload THIS file to BTC Portal.
+
 services:
   model:
     image: nakituonghuynh/develarper-lfm25:tuong-opt-v1

@@ -1,21 +1,36 @@
-# Submit variants (Portal)
+# submit — Tuong (feat/tuong)
 
-Upload **root** [`../docker-compose.yml`](../docker-compose.yml) to Portal (filename must be `docker-compose.yml`).
-
-Current root = **S1S2 one-shot** (2026-07-21).
+Upload **`docker-compose.yml`** to BTC Portal.
 
 | File | Purpose |
 |---|---|
-| ../docker-compose.yml | **S1S2** — maxlen 8192 + chunked + bt=2048 (nộp hôm nay) |
-| docker-compose.s1s2_oneshot.yml | Archive copy of S1S2 |
-| docker-compose.p0_baseline.yml | Archived P0 (Score 49.81) |
-| docker-compose.a1_mem90.yml | Safer VRAM |
-| docker-compose.a2_chunked.yml | Chunked only (bt=4096, maxlen 32k) |
-| docker-compose.b1_fp8.yml | Online FP8 quant |
-| docker-compose.b2_kvfp8.yml | FP8 KV cache |
+| **`docker-compose.yml`** | **T1 — nộp Portal.** fp8_flash + opt-platform p01 |
+| `docker-compose.tuong_cudagraphs_pivot.yml` | **T2 pivot.** CUDA graphs, platform OFF |
 
-```bash
-./scripts/set_image.sh longquanton/develarper-lfm25:p0
+## Image
+
+```
+nakituonghuynh/develarper-lfm25:tuong-opt-v1
 ```
 
-See [SUBMIT.md](../SUBMIT.md) · [PLAN.md](../PLAN.md).
+Hub: https://hub.docker.com/r/nakituonghuynh/develarper-lfm25
+
+Build: `Dockerfile.tuong` (vLLM v0.25.1 + flashinfer + weights + develarper_opt)
+
+```bash
+bash scripts/download_model.sh
+docker build --platform linux/amd64 -f Dockerfile.tuong \
+  -t nakituonghuynh/develarper-lfm25:tuong-opt-v1 .
+docker login -u nakituonghuynh
+docker push nakituonghuynh/develarper-lfm25:tuong-opt-v1
+```
+
+## Local test
+
+```bash
+docker compose -f submit/docker-compose.yml up
+curl http://localhost:8000/health
+docker compose -f submit/docker-compose.yml down
+```
+
+See [BTC_SUBMISSION.md](BTC_SUBMISSION.md) · [LOCAL_TESTING.md](LOCAL_TESTING.md)
