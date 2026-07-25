@@ -1,3 +1,4 @@
+# Scored 61.08
 services:
   model:
     image: asterios2707/develarper-agent:latest
@@ -18,10 +19,10 @@ services:
       - --enable-chunked-prefill # Default True
       - --mamba-cache-mode=align # Important with enabled prefix caching
       - --mamba-backend=flashinfer # Flashinfer-Mamba implementation
-      - --max-num-batched-tokens=256 # Lowered further from 512 for greedy decoding
+      - --max-num-batched-tokens=512 # Lowered for greedy decoding
       - --block-size=32 # Scaled up for testing
-      - --gpu-memory-utilization=0.97
-      - --max-model-len=8192 # Max sequence length
+      - --gpu-memory-utilization=0.97 # Greedy ceiling cap 0.96->0.97, risk OOM
+      - --max-model-len=5120 # Greedy change from 8192 for 9% overhead
       - --max-num-seqs=256 # Default
     ports:
       - "8000:8000"
