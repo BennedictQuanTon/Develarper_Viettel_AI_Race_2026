@@ -10,19 +10,20 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct 
       - --host=0.0.0.0 
       - --port=8000
-      - --quantization=fp8 # Online 8-bit Quantization
-      - --dtype=bfloat16 # Use bfloat16 for model weights
-      - --kv-cache-dtype=fp8 # Use fp8 for KV cache to save memory
-      - --tensor-parallel-size=1 # Use 1 tensor parallel size, default 1, immutable after init
-      - --enable-prefix-caching # Default True
-      - --enable-chunked-prefill # Default True
-      - --mamba-cache-mode=align # Important with enabled prefix caching
-      - --mamba-backend=flashinfer # Flashinfer-Mamba implementation
-      - --max-num-batched-tokens=256 # Lowered further from 512 for greedy decoding
-      - --block-size=32 # Scaled up for testing
+      - --quantization=fp8 
+      - --dtype=bfloat16 
+      - --kv-cache-dtype=fp8 
+      - --tensor-parallel-size=1 
+      - --enable-prefix-caching 
+      - --enable-chunked-prefill 
+      - --mamba-cache-mode=align 
+      - --mamba-backend=flashinfer 
+      - --max-num-batched-tokens=512 
+      - --block-size=32
       - --gpu-memory-utilization=0.97
-      - --max-model-len=5120 # Lowered from 8192 for greedy decoding
-      - --max-num-seqs=256 # Default
+      - --max-model-len=8192 
+      - --max-num-seqs=256
+      - --optimization-level=3
     ports:
       - "8000:8000"
     shm_size: "2g"

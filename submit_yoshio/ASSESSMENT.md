@@ -131,7 +131,7 @@ command:
 | **B** | `mbt=256` | 512 → 256 | +2-3 pts | TTFT may reach ~150-200ms, still safe |
 | **C** | A+B compound | mbt=256 + maxlen=5120 | +3-4 pts | After A and B individually scored |
 | **D** | `gpu-mem=0.97` | 0.96 → 0.97 | +0.5 pts | OOM risk under peak 70-conv load |
-| **E** | `-O3` baked in image | Rebuild p2 with pre-warmed graphs | +1-2 pts | New image push required |
+| **E** | `--optimization-level=3` | Add flag to compose | +1-2 pts | **No rebuild needed** — compose-only flag. 30-60s startup warmup at runtime; only viable if BTC health timeout > 90s. Worth re-testing now image is cached on BTC infra. |
 
 ---
 
