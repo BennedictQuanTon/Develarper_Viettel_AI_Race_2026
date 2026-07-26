@@ -1,0 +1,31 @@
+# p9-decode — FROM p7 + ShortConv v2 + fused RMSNorm (fail-open)
+# Maximize layer reuse with p7-oneshot (same pattern as p8).
+#
+# BANNED: OMP pins, static FP8, speculative, mamba-backend=CUDA.
+
+ARG BASE_IMAGE=longquanton/develarper-lfm25:p7-oneshot
+FROM ${BASE_IMAGE}
+
+COPY develarper_opt/ /opt/develarper/develarper_opt/
+COPY scripts/p9_api_probe.py /opt/develarper/p9_api_probe.py
+
+ENV PYTHONPATH="/opt/develarper:${PYTHONPATH:-}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ENABLE_DEVELARPER_OPT=1 \
+    DEVELARPER_PAYLOADS=p09_shortconv_v2,p09_fused_rms \
+    DEVELARPER_STRICT=0 \
+    DEVELARPER_LOG_LEVEL=INFO
+
+RUN SITE_PKGS="$(python3 -c 'import site; print(site.getsitepackages()[0])')" \
+    && cp /opt/develarper/develarper_opt/sitecustomize.py "${SITE_PKGS}/sitecustomize.py" \
+    && echo "sitecustomize installed at ${SITE_PKGS}/sitecustomize.py"
+
+RUN python3 -c "from develarper_opt.platform.registry import dry_run; dry_run()" \
+    && python3 /opt/develarper/p9_api_probe.py \
+    && (python3 -c "import triton; print('triton', triton.__version__)" \
+        || echo "WARNING: triton import failed at build — runtime fail-open")
+
+RUN test -f /model/config.json && ls -lah /model | head
+
+EXPOSE 8000

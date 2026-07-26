@@ -20,7 +20,9 @@
 | **Z1 Mamba** | QuanTon | **61.18** | **4 ms** | **48 / 68 ms**| **4** | ✅ Keep (ERS) | Image `p2-fi` + FlashInfer SSM + Align + bt=512 (**+1.61 điểm**, Fail 5 $\rightarrow$ 4). |
 | **#10 Flash** | Yoshio | **61.66** | **4 ms** | **48 / 70 ms**| **5** | Top 1 cũ | FlashInfer + Align + bt=512 + Block32 + MaxLen 8192. |
 | **Backup Tuned** | Team | **61.58** | **4 ms** | **48 / 71 ms**| **5** | ✅ Keep (ERS) | Image `:p2-fi` + FP8 + FlashInfer Align + `mbt=768` + `seqs=128`. Chạy siêu ổn định. |
-| **p7-oneshot** | Team | **62.01** | **4 ms** | **48 / 68 ms**| **5** | 🏆 **NEW ALL-TIME MVP**| Image `:p7-oneshot` (v0.26.0) + FlashInfer Align + `mbt=768` + `seqs=128`. **TTFT p95 hạ từ 70ms xuống 68ms** (**+0.35 điểm** vs #10). |
+| **p7-oneshot** | Team | **62.01** | **4 ms** | **48 / 68 ms**| **5** | 🏆 **ALL-TIME MVP**| Image `:p7-oneshot` (v0.26.0) + FlashInfer Align + `mbt=768` + `seqs=128`. **TTFT p95 hạ từ 70ms xuống 68ms** (**+0.35 điểm** vs #10). |
+| **p8-shortconv** | Team | **61.90** | **4 ms** | **46 / 69 ms**| **6** | ❌ Ablation | Fuse ShortConv 3-op. TBT không đổi; −0.11 vs p7. |
+| **p9-decode** | Team | **61.54** | **4 ms** | **49 / 69 ms**| **5** | ❌ Ablation | ShortConv v2 + RMSNorm + mem0.98 + cudagraph. TBT vẫn 4; −0.47 vs p7. |
 | **Z2-Trial** (15:20) | Team | 56.44 | 4 ms | 58 / 137 ms | 5 | ❌ Reject | ⚠️ `bt=256` xẻ 9 chunks prefill Turn 1 làm TTFT p95 tăng vọt 137ms (+95.7%). |
 | **Z2 Restored** | Current | **>61.66** | **4 ms** | **48 / 70 ms**| **4-5** | 🚀 **READY** | Khôi phục `bt=512` & default max-seqs để bảo vệ TTFT p50 48ms / p95 70ms. |
 | **Z3 Pro** | Proposal| **~70-80**| **< 2.0ms**| **~45 / 65 ms**| **0-1** | 🔬 **PROPOSED** | Image `p3-aot` + CPU Thread Pinning ENVs (OMP/OpenBLAS/MKL=1). |

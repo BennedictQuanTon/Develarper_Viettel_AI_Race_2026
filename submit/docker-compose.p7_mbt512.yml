@@ -1,6 +1,5 @@
-# p7 + mbt=512 oneshot — image vàng p7-oneshot, chỉ đổi batched-tokens 768→512
-# Rollback reference: submit/docker-compose.p7_oneshot.yml (ERS 62.01)
-# Expect: ~61.8–62.5 · TBT vẫn ~4 · có thể fail↓ · không kỳ vọng 65+
+# Archive — p7-oneshot CLI + mbt=512 (oneshot slot cuối)
+# Same as root docker-compose.yml at ship time
 services:
   model:
     image: longquanton/develarper-lfm25:p7-oneshot

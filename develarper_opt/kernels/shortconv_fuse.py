@@ -155,13 +155,19 @@ def fused_shortconv_decode(
     bias: Optional[torch.Tensor],
     conv_state_indices: torch.Tensor,
 ) -> torch.Tensor:
-    """Fused decode path. Raises on unsupported shapes (caller fail-opens)."""
+    """Fused decode path. Raises on unsupported shapes (caller fail-opens).
+
+    v2: accept any state_len >= 2. Fast Triton path only for state_len==2
+    (LFM2 default); otherwise use reference (still single Python entry).
+    """
     if B.dim() != 2 or weight.shape[-1] != 3:
         raise ValueError("fused_shortconv_decode expects [batch,dim] and width==3")
-    if conv_state.shape[-1] != 2:
-        # Keep kernel correct & simple for LFM2 default state_len = width-1 = 2.
-        raise ValueError("fused_shortconv_decode requires state_len==2")
-    if not B.is_cuda or not _TRITON_OK:
+    state_len = conv_state.shape[-1]
+    if state_len < 2:
+        raise ValueError("fused_shortconv_decode requires state_len>=2")
+
+    # General / non-CUDA / no-triton → reference (handles any state_len>=2).
+    if state_len != 2 or (not B.is_cuda) or (not _TRITON_OK):
         return shortconv_decode_reference(
             B, x, C, conv_state, weight, bias, conv_state_indices
         )
@@ -176,7 +182,7 @@ def fused_shortconv_decode(
         C,
         conv_state,
         weight,
-        bias if bias is not None else C,  # dummy ptr when no bias
+        bias if bias is not None else C,
         conv_state_indices,
         y,
         B.stride(0),
@@ -194,7 +200,7 @@ def fused_shortconv_decode(
         y.stride(1),
         batch,
         dim,
-        conv_state.shape[-1],
+        state_len,
         HAS_BIAS=bias is not None,
         BLOCK_N=BLOCK_N,
     )

@@ -46,7 +46,10 @@ class Flags:
 def load_flags() -> Flags:
     return Flags(
         enabled=_bool("ENABLE_DEVELARPER_OPT", True),
-        payloads=_list("DEVELARPER_PAYLOADS", ["p08_shortconv_fuse"]),
+        payloads=_list(
+            "DEVELARPER_PAYLOADS",
+            ["p09_shortconv_v2", "p09_fused_rms"],
+        ),
         strict=_bool("DEVELARPER_STRICT", False),
         log_level=os.environ.get("DEVELARPER_LOG_LEVEL", "INFO").upper(),
     )

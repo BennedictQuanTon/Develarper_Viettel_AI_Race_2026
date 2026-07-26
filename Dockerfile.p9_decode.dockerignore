@@ -1,0 +1,5 @@
+*
+!develarper_opt/
+!develarper_opt/**
+!scripts/
+!scripts/p9_api_probe.py
