@@ -1,0 +1,34 @@
+services:
+  model:
+    image: longquanton/develarper-lfm25:p2-fi
+    entrypoint:
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
+    command:
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.96
+      - --tensor-parallel-size=1
+      - --enable-prefix-caching
+      - --quantization=fp8
+      - --kv-cache-dtype=fp8
+      - --enable-chunked-prefill
+      - --max-num-batched-tokens=768
+      - --max-num-seqs=128
+      - --block-size=32
+      - --mamba-backend=flashinfer
+      - --mamba-cache-mode=align
+    ports:
+      - "8000:8000"
+    shm_size: "2g"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]

@@ -4,10 +4,10 @@
 
 | | |
 |---|---|
-| **Điểm vàng bất biến** | Yoshio **#10 · ERS 61.66 · TBT 4ms · TTFT 48/70 · fail 5** |
-| **Mục tiêu kế tiếp** | Phá sàn TBT **4 → ≤ 3.5ms** (cửa ERS **~65+**); stretch TBT **≤ 3.0** (cửa **~70**) |
-| **Máy hiện có** | Mac only (Docker OK, **không NVIDIA**) |
-| **Nguyên tắc** | Đúng luật · một đòn / một tag · đo trước nộp · không đốt Portal |
+| **Điểm vàng bất biến** | Yoshio **#10 · ERS 61.66** & Backup Tuned **ERS 61.58 · TBT 4ms · TTFT 48/71 · fail 5** |
+| **Mục tiêu kế tiếp** | Phá sàn TBT **4 → ≤ 3.3ms** (cửa ERS **~65–68+**); stretch TBT **≤ 3.0ms** (cửa **~70**) |
+| **Máy hiện có** | Mac only (Docker Desktop OK, **0$ chi phí thuê cluster**) |
+| **Nguyên tắc** | Đúng luật · một đòn / một tag · đo trước nộp · không đột biến cờ lỗi |
 
 ---
 
@@ -55,15 +55,16 @@ TBT p50/median ≈ 4 ms     ← chỉ E1 từng phá (và p5 phá ngược)
 TTFT p50        ≈ 48 ms   ← đã có từ P0 (prefix); gần như sàn
 ```
 
-Toán ERS (γ=2, w=0.5), TTFT giữ 48:
+Toán ERS ($\gamma=2, w=0.5$), TTFT p50 giữ 48ms ($s_{\text{ttft}} \approx 0.8145 \rightarrow 0.5 \cdot s_{\text{ttft}} \approx 0.4072$):
 
-| TBT | ERS lý thuyết ≈ |
-|---|---|
-| 4.0 | ~62–63 (khớp #10) |
-| **3.5** | **~66–67** ← mục tiêu chính Operation SHORTCONV |
-| **3.0** | **~70–71** ← stretch |
+| TBT (TPOT) median | $s_{\text{tpot}} = (\frac{10 - \text{TBT}}{9})^2$ | Đóng góp $0.5 \cdot s_{\text{tpot}}$ | ERS lý thuyết (với 418/420 ok) |
+|---|---|---|---|
+| **4.0 ms** | 0.4444 | +0.2222 | **~61.6 – 62.5** (khớp Yoshio #10 & Backup Tuned) |
+| **3.5 ms** | 0.5216 | +0.2608 | **~65.5 – 66.5** ← Mục tiêu Operation SHORTCONV P1 |
+| **3.3 ms** | 0.5542 | +0.2771 | **~67.0 – 68.0** ← Mục tiêu Operation SHORTCONV P2 |
+| **3.0 ms** | 0.6049 | +0.3025 | **~70.0 – 71.0** ← Stretch Target |
 
-Fail 5→0 chỉ ~**+0.7** điểm — không đủ một mình.
+Fail 5→0 chỉ ~**+0.7** điểm — không đủ một mình nếu không nén được TBT dưới 4ms.
 
 ---
 
