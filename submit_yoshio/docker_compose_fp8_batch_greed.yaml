@@ -21,7 +21,7 @@ services:
       - --max-num-batched-tokens=256 # Lowered further from 512 for greedy decoding
       - --block-size=32 # Scaled up for testing
       - --gpu-memory-utilization=0.97
-      - --max-model-len=5120 # Lowered from 8192 for greedy decoding
+      - --max-model-len=8192 # Max sequence length
       - --max-num-seqs=256 # Default
     ports:
       - "8000:8000"
