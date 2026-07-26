@@ -14,7 +14,7 @@ echo "== Preflight =="
 if [[ -f model_weights/LFM2.5-1.2B-Instruct/config.json ]]; then
   ok "local weights present"
 else
-  bad "missing model_weights/LFM2.5-1.2B-Instruct (run: make download-model)"
+  bad "missing model_weights/LFM2.5-1.2B-Instruct (run: bash scripts/workflow.sh download-model)"
 fi
 
 # Compose submit form
@@ -60,4 +60,4 @@ if [[ "${fail}" -ne 0 ]]; then
   echo "Preflight FAILED"
   exit 1
 fi
-echo "Preflight PASSED — next: make build && make push IMAGE_REPO=you/repo"
+echo "Preflight PASSED — next: bash scripts/workflow.sh build && bash scripts/workflow.sh push"
