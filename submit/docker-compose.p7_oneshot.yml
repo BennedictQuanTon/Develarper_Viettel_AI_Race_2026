@@ -1,8 +1,7 @@
-# p8-shortconv canary — identical CLI to p7-oneshot; only image (+ opt via sitecustomize)
-# Rollback: submit/docker-compose.p7_oneshot.yml
+# Rollback gold — p7-oneshot ERS 62.01 (slot 2 if p8 fails / regresses)
 services:
   model:
-    image: longquanton/develarper-lfm25:p8-shortconv
+    image: longquanton/develarper-lfm25:p7-oneshot
     entrypoint:
       - python3
       - -m

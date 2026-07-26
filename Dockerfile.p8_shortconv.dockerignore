@@ -1,0 +1,6 @@
+# Keep build context tiny — p8 only needs opt sources (weights already in p7 base)
+*
+!develarper_opt/
+!develarper_opt/**
+!scripts/
+!scripts/p8_api_probe.py

@@ -1,253 +1,139 @@
-# PLAN CLASSIC — Operation SHORTCONV
-## Viettel AI Race 2026 · Challenge 3 · Team Develarper  
-### Bản kế hoạch kinh điển sau toàn bộ lịch sử Portal (P0 → p5)
+# PLAN OPERATION SHORTCONV — Mac-only p8 canary (neo p7)
 
 | | |
 |---|---|
-| **Điểm vàng bất biến** | Yoshio **#10 · ERS 61.66** & Backup Tuned **ERS 61.58 · TBT 4ms · TTFT 48/71 · fail 5** |
-| **Mục tiêu kế tiếp** | Phá sàn TBT **4 → ≤ 3.3ms** (cửa ERS **~65–68+**); stretch TBT **≤ 3.0ms** (cửa **~70**) |
-| **Máy hiện có** | Mac only (Docker Desktop OK, **0$ chi phí thuê cluster**) |
-| **Nguyên tắc** | Đúng luật · một đòn / một tag · đo trước nộp · không đột biến cờ lỗi |
+| **Baseline vàng** | `p7-oneshot` · ERS **62.01** · TBT **4ms** · TTFT 48/68 · fail 5 |
+| **Canary** | `longquanton/develarper-lfm25:p8-shortconv` |
+| **Máy** | MacBook only · **không** thuê cluster |
+| **Slot** | 2 — slot1 p8 · slot2 rollback p7 nếu hỏng/tụt |
+| **Nguyên tắc** | CLI p7 nguyên văn · fail-open · một đòn ShortConv decode |
 
 ---
 
-## 0. Tuyên ngôn (sau quá nhiều lần nộp)
+## 0. Verdict công tâm
 
-Chúng ta **không** còn ở pha “vặn compose may rủi”.
-
-Portal đã dạy một định lý cứng:
-
-> **Mọi đòn không đụng đường decode GPU của LFM2 thì không hạ được TBT dưới 4ms.**  
-> Mọi đòn đụng nhầm đường decode (static FP8) có thể **đẩy TBT về 6ms**.
-
-Vàng #10 là **trần serving chuẩn** (online FP8 + FlashInfer + align + bt=512).  
-Còn lại đúng một mặt trận còn mở: **short-convolution layers** — phần hybrid chưa được “E1-hóa”.
-
-Đây là plan **duy nhất còn EV** để tăng điểm thật. Khó. Làm được trên Mac phần lớn; **chỉ thuê GPU Hopper vài giờ** để compile + benchmark + bake image.
+1. **SHORTCONV đúng chỗ:** FlashInfer chỉ tăng Mamba SSU; LFM2 ShortConv decode vẫn `causal_conv1d_update` + 2 pointwise (`B*x`, `C*y`).
+2. **Cửa 65+ = hạ TPOT/TBT**, không phải đánh TTFT p50/p95 (xem §2).
+3. **Mac không compile CUDA SM90** — ship **Triton source**, BTC H200 JIT.
+4. **Không hứa 65+.** Mục tiêu: canary sạch + tín hiệu TBT; sống sót Portal là ràng buộc cứng.
 
 ---
 
-## 1. Bảng tử thần — đúc từ Portal (không bàn lại)
+## 1. Bảng tử thần (cập nhật)
 
-### 1.1 Win đã chứng minh
+### Win
 
-| Đòn | Δ metric | Δ ERS | Họ |
-|---|---|---|---|
-| Online FP8 W+KV | TBT 6→**4** | **+9.76** | **GPU decode Linear** |
-| FlashInfer + `mamba-cache-mode=align` + bt=512 | TTFT đuôi + fail | **+1.61** | **Prefill/cache hybrid** |
-| #10: block32 + maxlen8192 + mem0.96 | tinh chỉnh | **+0.48** | **Resource** |
-
-### 1.2 Fail đã chứng minh — CẤM VĨNH VIỄN trên Portal
-
-| Đòn | Kết quả | Cấm |
+| Đòn | Δ | Ghi chú |
 |---|---|---|
-| Speculative n-gram | Crash / probe | ✅ |
-| `mamba-backend=CUDA` / cờ sai / `=true` | Exit 1/2 | ✅ |
-| `bt=256` + `max-num-seqs=80` | TTFT p95 137 · 56.44 | ✅ |
-| OMP / TOKENIZERS env pin | TTFT xấu · 58.34 | ✅ |
-| Offline static FP8 (compressed-tensors) | TBT **4→6** · **50.46** | ✅ |
-| Vặn CLI thêm trên `:p2-fi` kỳ vọng lớn | Trần #10 | ✅ |
+| Online FP8 | TBT 6→4 · **+9.76** | GPU Linear |
+| FlashInfer + align | TTFT/fail · **+1.61** | Prefill/cache |
+| p7 v0.26 | p95 70→68 · **+0.35** | TBT vẫn 4 |
 
-### 1.3 Hai sàn cứng
+### CẤM vĩnh viễn
 
-```text
-TBT p50/median ≈ 4 ms     ← chỉ E1 từng phá (và p5 phá ngược)
-TTFT p50        ≈ 48 ms   ← đã có từ P0 (prefix); gần như sàn
-```
-
-Toán ERS ($\gamma=2, w=0.5$), TTFT p50 giữ 48ms ($s_{\text{ttft}} \approx 0.8145 \rightarrow 0.5 \cdot s_{\text{ttft}} \approx 0.4072$):
-
-| TBT (TPOT) median | $s_{\text{tpot}} = (\frac{10 - \text{TBT}}{9})^2$ | Đóng góp $0.5 \cdot s_{\text{tpot}}$ | ERS lý thuyết (với 418/420 ok) |
-|---|---|---|---|
-| **4.0 ms** | 0.4444 | +0.2222 | **~61.6 – 62.5** (khớp Yoshio #10 & Backup Tuned) |
-| **3.5 ms** | 0.5216 | +0.2608 | **~65.5 – 66.5** ← Mục tiêu Operation SHORTCONV P1 |
-| **3.3 ms** | 0.5542 | +0.2771 | **~67.0 – 68.0** ← Mục tiêu Operation SHORTCONV P2 |
-| **3.0 ms** | 0.6049 | +0.3025 | **~70.0 – 71.0** ← Stretch Target |
-
-Fail 5→0 chỉ ~**+0.7** điểm — không đủ một mình nếu không nén được TBT dưới 4ms.
-
----
-
-## 2. Chẩn đoán kiến trúc — vì sao còn room
-
-Từ `config.json` LFM2.5-1.2B:
-
-```text
-16 layers:
-  conv            × 10  (62.5%)   ← short-conv, conv_L_cache = 3
-  full_attention  ×  6  (37.5%)   ← GQA 32/8, đã hưởng FP8 + prefix/KV-FP8
-```
-
-**Insight kinh điển:**
-
-1. E1 FP8 tối **Linear / attention matmul** → TBT 6→4.  
-2. 10/16 layer là **conv cửa sổ 3** — mỗi token decode vẫn launch kernel(s) riêng (conv → gate/SiLU → …).  
-3. Z3 chứng minh: **không phải** “chỉ thiếu OMP=1”.  
-4. p5 chứng minh: **đổi format weight Linear** thêm lần nữa **không** giúp — còn phá path đang thắng.  
-5. Z1 chứng minh: hybrid **prefill** còn ăn nhờ **align SSM/state**; decode token-by-token vẫn dính **short-conv**.
-
-→ Operation SHORTCONV = giảm **chi phí / số launch** của 10 layer conv mỗi decode step, **không** đụng CLI vàng #10.
-
----
-
-## 3. Chiến lược Operation SHORTCONV (1 mục tiêu · 3 tầng)
-
-### Tầng S0 — Bảo hiểm (không đàm phán)
-
-- Compose Portal mặc định = **pure Yoshio #10** (`:p2-fi` + online FP8 + flashinfer + align + bt=512…).  
-- Shortlist GPQA: **P0 + #10 + Z1…** — **không** p5/Z3.  
-- Tag mới chỉ `:p7-shortconv` (hoặc tương đương). **Không đè** `:p0`/`:p2-fi`.
-
-### Tầng S1 — Kernel path (đòn chính · phá TBT)
-
-**Mục tiêu kỹ thuật:** fused (hoặc SM90-tuned) **causal short-conv L=3** cho LFM2:
-
-1. Inventory: trong vLLM 0.25.1, LFM2 conv đang gọi kernel nào (`causal_conv1d`, Triton, eager)?  
-2. Đóng image với **`causal-conv1d` / tương đương build `TORCH_CUDA_ARCH_LIST=9.0`** (H200 = Hopper SM90) — tránh PTX JIT lạnh / kernel generic.  
-3. (Nâng cao) Triton **fuse** `causal_conv1d + activation/gate` thành 1 launch / layer.  
-4. Giữ numerics: so khớp logits vs #10 trên vài prompt (Δ nhỏ) — bảo vệ Accuracy Gate.
-
-**Không** làm trong S1: đổi quant scheme, speculative, bt, OMP.
-
-### Tầng S2 — Bake phục vụ (đòn phụ · bảo vệ TTFT)
-
-Chỉ **sau** khi S1 đã chứng minh TBT↓ trên GPU thuê:
-
-- Warmup AOT Triton/vLLM cache **trên Hopper**, nhét vào cùng tag (hoặc `:p7b`).  
-- Không nộp AOT đơn độc kỳ vọng 65–70.
-
-### Tầng S3 — Kỷ luật Portal
-
-```text
-IF local_or_rented_bench.TBT_median > 3.7 ms:  DO NOT SUBMIT
-IF boot_smoke fails:                           DO NOT SUBMIT
-IF logits_delta vs #10 quá lớn:                DO NOT SUBMIT
-ELSE: submit ONE canary, record ablation row
-```
-
----
-
-## 4. Làm được gì trên **chỉ một máy Mac**?
-
-Mac **không** chạy H200. Plan chia 2 vòng đời:
-
-### Vòng A — Mac (90% công việc trí tuệ · miễn phí)
-
-| Việc | Output |
+| Đòn | Kết quả |
 |---|---|
-| Đọc source LFM2 trong image `:p2-fi` / docs vLLM | Bản đồ file kernel hiện tại |
-| Viết Triton fuse prototype (logic + unit test CPU/numpy) | `kernels/shortconv_fuse.py` |
-| Viết Dockerfile.p7 + build script “GPU required” | Sẵn sàng 1 lệnh trên máy thuê |
-| Viết `bench_tbt.py` (OpenAI stream → TTFT/TBT) | Đo được ngay khi có GPU |
-| Viết checklist preflight = tử thần §1.2 | Không nộp sai pattern |
-| Giữ Docker Hub login + script push | Như p5 (Mac build amd64 được nếu binary CUDA đã compile sẵn trong context — thường **phải build trên CUDA host**) |
+| Speculative n-gram | Crash / probe |
+| `mamba-backend=CUDA` / `=true` | Exit 1/2 |
+| `bt=256` + `seqs=80` | TTFT p95 137 · 56.44 |
+| OMP / TOKENIZERS env | 58.34 |
+| Offline static FP8 | TBT 4→6 · 50.46 |
 
-### Vòng B — Thuê GPU **tối thiểu** (bắt buộc cho S1)
+---
 
-Không cần mua máy. **1–3 giờ** RunPod / Vast / Lambda **H100/H200** (hoặc A100 kém hơn một chút):
+## 2. So sánh ERS: TBT/TPOT vs TTFT p50/p95
+
+**Bạn đúng phần lõi:** muốn 65+ phải kéo **TPOT ~4 → ≤3.5–3.7ms**.
+
+**Sửa hiểu nhầm:**
+- ERS **không** chấm median/p50/p95 — trung bình 420 request, mỗi request `0.5·s_ttft + 0.5·s_tpot`, γ=2.
+- TTFT p50 đã ~48ms từ P0→p7 (gần bão hòa band 10–400ms).
+- Biên tế gần p7: **~+8 pts / 1ms TPOT** vs **~+0.23 pts / 1ms TTFT**.
+
+| Thay đổi | Δ ERS ước lượng |
+|---|---|
+| TPOT 4→3.7 | ~+2.3 (cửa ~64–65) |
+| TPOT 4→3.5 | ~+3.9 (cửa ~66–67) |
+| TPOT 4→3.0 | ~+8 (cửa ~70) |
+| Chỉ phẳng TTFT p95 68→48 | ~+0.2 |
+| Fail 5→0 | ~+0.7 |
+
+→ Canary p8 **nhắm TBT**; TTFT chỉ bảo vệ không regress (Z2).
+
+---
+
+## 3. Kiến trúc p8
 
 ```text
-1. rsync repo + weights
-2. bash scripts/build_push_p7_shortconv.sh   # compile SM90 + bake /model từ p2-fi recipe
-3. bench_tbt.py against #10 baseline container
-4. IF TBT≤3.5: push :p7-shortconv, về Mac chỉ cp compose + nộp
+Image :p8-shortconv
+  = vLLM 0.26.0 + flashinfer + /model (BF16)
+  + develarper_opt p08_shortconv_fuse
+  + sitecustomize → patch ShortConv.forward_cuda trước api_server
+
+Decode (width=3, state_len=2):
+  fused Triton: y = C * conv_update(B * x)   # 1 launch / layer
+Prefill: stock causal_conv1d_fn
+Fail-open: mọi lỗi patch/fuse → stock p7 path (server vẫn lên)
 ```
 
-**Mac alone không compile CUDA SM90 được** — đó là ràng buộc vật lý, không phải thiếu cố gắng. Plan “outstanding” = **tối ưu số giờ GPU thuê → 0 nếu bench fail sớm**.
+**Compose Portal:** entrypoint khóa BTC giữ nguyên; **chỉ đổi `image:`**.
+
+File:
+- [`Dockerfile.p8_shortconv`](Dockerfile.p8_shortconv)
+- [`develarper_opt/`](develarper_opt/)
+- [`scripts/build_push_p8_shortconv.sh`](scripts/build_push_p8_shortconv.sh)
+- Root [`docker-compose.yml`](docker-compose.yml) → p8
+- Rollback [`submit/docker-compose.p7_oneshot.yml`](submit/docker-compose.p7_oneshot.yml)
 
 ---
 
-## 5. Lộ trình 7 ngày (classic campaign)
+## 4. Ngân sách dung lượng (Mac: pull → build → push)
 
-### Ngày 1 — Archaeology (Mac)
-- `docker run --entrypoint bash :p2-fi` → tìm `lfm2`, `causal_conv`, `short_conv` trong site-packages.  
-- Ghi: entry kernel, có/không `causal_conv1d`, version flashinfer.  
-- Deliverable: `eval/shortconv_archaeology.md`
+**p8 build = `FROM :p7-oneshot` + layer opt nhỏ** (không kéo lại v0.26 / không COPY lại 2.2GB weights).
 
-### Ngày 2–3 — Design + Triton draft (Mac)
-- Spec fuse: input `[B,D,L=3 cache + 1]` → output hidden.  
-- Unit test vs PyTorch reference conv (CPU).  
-- Deliverable: `kernels/` + tests xanh trên Mac.
-
-### Ngày 4 — Dockerfile.p7 (Mac viết · GPU chạy)
-- FROM `vllm/vllm-openai:v0.25.1`  
-- Install flashinfer (như p2-fi)  
-- Build `causal-conv1d` / custom wheel `TORCH_CUDA_ARCH_LIST=9.0+PTX`  
-- COPY BF16 weights (như p2-fi) — **vẫn online `--quantization=fp8` như #10**  
-- **Cấm** COPY compressed-tensors p5  
-
-### Ngày 5 — Thuê GPU · Build + Bench
-- Baseline: chạy container #10 equivalent, đo TBT.  
-- Candidate: `:p7-shortconv`, đo TBT.  
-- Gate §3 S3.
-
-### Ngày 6 — (Optional) AOT bake nếu TBT đã thắng
-- Warmup trên Hopper, commit cache vào tag `p7` hoặc `p7-aot`.
-
-### Ngày 7 — Portal canary **một lần**
-- Compose = #10 CLI nguyên văn, **chỉ đổi `image:`**.  
-- Ghi ablation.  
-- Thắng → freeze. Thua → dừng, giữ #10.
-
----
-
-## 6. Compose nộp khi (và chỉ khi) gate đạt
-
-```yaml
-# image ONLY change vs Yoshio #10
-image: longquanton/develarper-lfm25:p7-shortconv
-# command: y hệt #10 kể cả --quantization=fp8
-```
-
-Mọi flag khác = phản bội định lý §0.
-
----
-
-## 7. Expect điểm (thành thật · gắn TBT)
-
-| Kết quả bench thuê GPU | Hành động | Expect Portal |
+| Hạng mục | Typical (máy đã có p7) | Worst case |
 |---|---|---|
-| TBT vẫn ~4.0 | **Không nộp** | — |
-| TBT ~3.5–3.7 | Nộp 1 canary | **~64–67** |
-| TBT ~3.0–3.4 | Nộp 1 canary | **~68–71** |
-| TBT ≥4 hoặc boot lỗi | Abort | Giữ **61.66** |
+| Download base p7 | **~0** | ~10.8 GB nếu mất local |
+| Build context | chỉ `develarper_opt` (dockerignore) | — |
+| Push `:p8-shortconv` | **~0.01–0.2 GB** (Hub đã có layer p7) | ~11 GB nếu không reuse |
+| **Tổng mạng** | **≪ 1 GB** (buffer **~2 GB** đủ) | ~12–20 GB |
 
-Không hứa 70 trước khi thấy TBT ≤3 trên GPU thật.
-
----
-
-## 8. Tại sao đây là plan “outstanding” chứ không phải slide ảo
-
-1. **Bám evidence Portal**, không bám ước mơ roadmap 85–95.  
-2. **Đúng chỗ còn lại** trong model (10/16 conv), không lặp họ đòn đã chết.  
-3. **Tách Mac / GPU** — dùng hết máy hiện có, không giả vờ compile CUDA trên Mac.  
-4. **Go/no-go** trước Portal — hết kiểu Z2/Z3/p5 đốt điểm.  
-5. **Giữ #10** làm bảo hiểm — cuộc thi là điểm tốt nhất, không phải lần nộp cuối.
+Disk trống: vài GB thêm cho layer mới là đủ (không cần 30 GB như bản build-from-scratch cũ).
 
 ---
 
-## 9. Việc làm **ngay trên Mac hôm nay** (bắt đầu Operation SHORTCONV)
+## 5. Lệnh bạn tự chạy (khi sẵn sàng)
 
-1. Giữ `docker-compose.yml` = pure #10 (đã revert).  
-2. Tạo nhánh làm việc / folder `kernels/` + `eval/shortconv_archaeology.md`.  
-3. Chạy archaeology trên image `:p2-fi` (Docker Desktop đã có).  
-4. Song song: chọn vendor GPU thuê (H100/H200), chuẩn bị SSH key + budget 1–3 giờ.  
-5. **Không** nộp Portal cho đến khi có số TBT bench.
+```bash
+cd /Users/davark/Downloads/Everything/Github/Develarper_Viettel_AI_Race_2026
 
----
-
-## 10. Thẻ bỏ túi
-
-```text
-VÀNG:  #10 61.66 — không đụng CLI
-CẤM:   env OMP | bt=256 | seqs=80 | speculative | static FP8 p5 | cờ bịa
-MỞ:    short-conv SM90 / fuse · tag p7 · đo TBT rồi mới nộp
-TOÁN:  TBT 3.5 → ~65+ ; TBT 3.0 → ~70 ; TBT 4 = trần serving
-MÁY:   Mac = nghiên cứu + Docker + Hub ; GPU thuê = compile + bench + bake
+# Docker Desktop ON + đã docker login
+bash scripts/build_push_p8_shortconv.sh
 ```
 
+Sau push OK → upload **root `docker-compose.yml`** lên Portal.
+
+**Slot 2 rollback:** copy `submit/docker-compose.p7_oneshot.yml` → `docker-compose.yml` rồi nộp lại.
+
 ---
 
-**Ký tên plan:** Operation SHORTCONV — *một đòn đúng chỗ, một lần nộp khi đã đo.*
+## 6. Gate đọc kết quả Portal
 
-Bước tiếp theo nếu team approve: **Day 1 archaeology trên `:p2-fi`** (mở container, map kernel LFM2 conv) — làm được 100% trên Mac + Docker.
+| Kết quả | Hành động |
+|---|---|
+| Boot FAIL | Slot2 → p7 ngay |
+| TBT vẫn 4 · ERS ~61–62 | Giữ p7; fuse không ăn / fallback |
+| TBT ≤ 3.7 · ERS ↑ | Freeze p8 |
+| Điểm &lt; ~58 / TBT xấu | Rollback p7; cấm lặp fuse này |
+
+---
+
+## 7. Thẻ bỏ túi
+
+```text
+VÀNG:  p7 62.01 — CLI không đụng
+P8:    image only + Triton ShortConv decode fuse (fail-open)
+CẤM:   OMP | bt=256 | speculative | static FP8 | mamba=CUDA
+TOÁN:  TBT 3.5 → ~65+ ; TTFT p50/p95 không đủ một mình
+MÁY:   Mac buildx amd64 ; JIT thật trên H200 BTC
+```

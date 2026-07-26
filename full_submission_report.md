@@ -113,6 +113,7 @@ $$\text{Score}_{\text{final}} = 100 \times \text{ERS} \times f(\Delta)$$
 | **E2-Safe** | `lfm25:p1-v25` (v0.25.1) | **59.57** | **4 ms** | 53ms / 72ms | **5** | ✅ Keep (ERS) | Nâng vLLM v0.25.1 + Chunked Prefill 1024. Cứu 2 request lỗi (fail 7 $\rightarrow$ 5). |
 | **Z1 FlashMamba**| `lfm25:p2-fi` (v0.25.1) | **61.18** | **4 ms** | **48ms / 68ms** | **4** | ✅ Keep (ERS) | Native FlashInfer SSM + Mamba State Cache Align + bt=512 (**+1.61 điểm**, Fail 5 $\rightarrow$ 4). |
 | **Backup Tuned** | `lfm25:p2-fi` (v0.25.1) | **61.58** | **4 ms** | **48ms / 71ms** | **5** | ✅ Keep (ERS) | Image `:p2-fi` + FP8 + FlashInfer Align + `mbt=768` + `seqs=128`. Ngang kỷ lục (chênh 0.08 điểm). |
+| **p7-oneshot** | `lfm25:p7-oneshot` (v0.26.0) | **62.01** | **4 ms** | **48ms / 68ms** | **5** | 🏆 **NEW MVP RECORD** | Image `:p7-oneshot` + v0.26.0 + FlashInfer Align + `mbt=768` + `seqs=128`. TTFT p95 hạ xuống 68ms (**+0.35 điểm** so với #10). |
 
 ---
 

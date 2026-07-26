@@ -1,0 +1,41 @@
+# p8-shortconv — reuse p7-oneshot layers, only add SHORTCONV opt patch
+#
+# WHY FROM p7 (not v0.26.0 again):
+#   p7 already has vLLM 0.26 + flashinfer + /model weights.
+#   Building FROM p7 maximizes local/Hub layer reuse → tiny download & push.
+#
+# Portal: keep entrypoint python3 -m vllm.entrypoints.openai.api_server
+#         CLI identical to p7; only image tag changes.
+#
+# BANNED: OMP pins, static FP8 weights, speculative, mamba-backend=CUDA.
+
+ARG BASE_IMAGE=longquanton/develarper-lfm25:p7-oneshot
+FROM ${BASE_IMAGE}
+
+# Opt package (Triton source — JIT on BTC H200)
+COPY develarper_opt/ /opt/develarper/develarper_opt/
+COPY scripts/p8_api_probe.py /opt/develarper/p8_api_probe.py
+
+ENV PYTHONPATH="/opt/develarper:${PYTHONPATH}" \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    ENABLE_DEVELARPER_OPT=1 \
+    DEVELARPER_PAYLOADS=p08_shortconv_fuse \
+    DEVELARPER_STRICT=0 \
+    DEVELARPER_LOG_LEVEL=INFO
+
+# sitecustomize → auto-runs before `python -m vllm.entrypoints.openai.api_server`
+RUN SITE_PKGS="$(python3 -c 'import site; print(site.getsitepackages()[0])')" \
+    && cp /opt/develarper/develarper_opt/sitecustomize.py "${SITE_PKGS}/sitecustomize.py" \
+    && echo "sitecustomize installed at ${SITE_PKGS}/sitecustomize.py"
+
+# Fail build if package/API broken; triton warn-only
+RUN python3 -c "from develarper_opt.platform.registry import dry_run; dry_run()" \
+    && python3 /opt/develarper/p8_api_probe.py \
+    && (python3 -c "import triton; print('triton', triton.__version__)" \
+        || echo "WARNING: triton import failed at build — runtime will fail-open to stock")
+
+# Weights already present from p7 at /model — sanity only
+RUN test -f /model/config.json && ls -lah /model | head
+
+EXPOSE 8000

@@ -1,5 +1,4 @@
-# p8-shortconv canary — identical CLI to p7-oneshot; only image (+ opt via sitecustomize)
-# Rollback: submit/docker-compose.p7_oneshot.yml
+# Archive — p8 SHORTCONV canary (same as root docker-compose.yml at ship time)
 services:
   model:
     image: longquanton/develarper-lfm25:p8-shortconv
