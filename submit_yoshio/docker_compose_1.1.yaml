@@ -1,5 +1,4 @@
-# Scored 60.34, regressed, do not submit
-
+# Scored 57.94, regressed heavily, do not submit
 services:
   model:
     image: asterios2707/develarper-agent:latest
@@ -20,11 +19,11 @@ services:
       - --enable-chunked-prefill 
       - --mamba-cache-mode=align 
       - --mamba-backend=flashinfer 
-      - --max-num-batched-tokens=512 
+      - --max-num-batched-tokens=768 
       - --block-size=32
       - --gpu-memory-utilization=0.97
       - --max-model-len=8192 
-      - --max-num-seqs=256
+      - --max-num-seqs=128
       - --optimization-level=3
     ports:
       - "8000:8000"
