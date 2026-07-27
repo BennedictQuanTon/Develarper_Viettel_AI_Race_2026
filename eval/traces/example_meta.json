@@ -12,5 +12,5 @@
     "conversation_start_gap_s": 0.02,
     "think_time_s": 0.3
   },
-  "notes": "Synthetic stand-in until BTC publishes the real redacted trace/meta. Field names match PROBLEM_VN.md."
+  "notes": "Synthetic stand-in until BTC publishes the real redacted trace/meta. Field names match Document/COMPETITION.md."
 }

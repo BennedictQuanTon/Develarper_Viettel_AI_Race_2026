@@ -1,15 +1,17 @@
-# Portal upload — Tuong T4 (fp8_flash + prefill fairness, platform OFF)
-# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+# Portal upload — Tuong T5 (image-level optimizations, tuong-opt-v2)
+# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v2
 # Upload THIS file to BTC Portal.
 #
-# T1 (p01 Triton)    scored 61.03 (TTFT 50/71, TBT 4, fail 5)
-# T2 (CUDA graphs)   scored 56.86 (TTFT 62/93, TBT 4, fail 5) -> REJECTED
-# T3 (scheduler)     never submitted (slot became T4)
-# T4 targets TTFT via chunked-prefill fairness (max-num-partial-prefills).
+# HISTORY:
+# T1 (p01 Triton)     scored 61.03  (TTFT 50/71, TBT 4, fail 5)
+# T2 (CUDA graphs)    scored 56.86  (TTFT 62/93, TBT 4, fail 5) -> REJECTED
+# T3 (scheduler)      never submitted
+# T4 (partial prefill) CRASHED — NotImplementedError in v0.25.1
+# T5 targets TTFT via image-level: uvloop, warmup, env tuning, V1 engine, seqs=128
 
 services:
   model:
-    image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+    image: nakituonghuynh/develarper-lfm25:tuong-opt-v2
     entrypoint:
       - python3
       - -m
@@ -19,7 +21,7 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct
       - --host=0.0.0.0
       - --port=8000
-      # === Giữ nguyên fp8_flash stack (Yoshio 61.66) ===
+      # === fp8_flash stack (proven at 61.66 by Yoshio) ===
       - --quantization=fp8
       - --dtype=bfloat16
       - --kv-cache-dtype=fp8
@@ -32,19 +34,21 @@ services:
       - --block-size=32
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
-      - --max-num-seqs=256
-      # === T4: prefill fairness — tấn công TTFT ===
-      - --max-num-partial-prefills=4
-      - --max-long-partial-prefills=2
-      - --long-prefill-token-threshold=1024
+      # === T5: tuned for 3 vCPU — reduce scheduler overhead ===
+      - --max-num-seqs=128
       - --disable-log-stats
     environment:
-      - ENABLE_DEVELARPER_OPT=0
-      - DEVELARPER_PAYLOADS=
+      # --- CPU thread control (prevent thread storms on 3 vCPU) ---
       - OMP_NUM_THREADS=1
       - OPENBLAS_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+      - TOKENIZERS_PARALLELISM=false
+      # --- CUDA / vLLM runtime ---
+      - CUDA_MODULE_LOADING=LAZY
       - VLLM_ATTENTION_BACKEND=FLASHINFER
       - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+      # --- V1 engine: near-zero CPU overhead scheduler ---
+      - VLLM_USE_V1=1
     ports:
       - "8000:8000"
     shm_size: "2g"

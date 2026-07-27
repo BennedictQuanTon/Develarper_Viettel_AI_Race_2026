@@ -8,12 +8,10 @@
 #   + LFM2.5 weights baked at /model
 #   + develarper_opt patch platform (sitecustomize + p01 RMSNorm)
 #
-# Build (from repo root, after make download-model):
-#   docker build --platform linux/amd64 -f Dockerfile.tuong \
-#     -t <YOUR_DOCKERHUB>/develarper-lfm25:tuong-opt-v1 .
-#
-# Push:
-#   docker push <YOUR_DOCKERHUB>/develarper-lfm25:tuong-opt-v1
+# Build (from repo root, after bash scripts/workflow.sh download-model):
+#   bash scripts/workflow.sh build-tuong
+#   bash scripts/workflow.sh push-tuong
+# Or one shot: bash scripts/workflow.sh tuong
 # ─────────────────────────────────────────────────────────────────────────────
 
 ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1

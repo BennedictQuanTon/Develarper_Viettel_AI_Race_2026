@@ -23,6 +23,7 @@ cd "${ROOT}"
 IMAGE_REPO="${IMAGE_REPO:-nakituonghuynh/develarper-lfm25}"
 TAG="${TAG:-p0}"
 TUONG_TAG="${TUONG_TAG:-tuong-opt-v1}"
+TUONG_V2_TAG="${TUONG_V2_TAG:-tuong-opt-v2}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 VLLM_IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:v0.25.1}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
@@ -75,14 +76,18 @@ Commands:
   preflight         Local checks before push
   build             docker buildx (DOCKERFILE, TAG)
   build-tuong       Build Dockerfile.tuong -> \${IMAGE_REPO}:\${TUONG_TAG}
+  build-tuong-v2    Build Dockerfile.tuong.v2 -> \${IMAGE_REPO}:\${TUONG_V2_TAG}
   build-baseline    Build with vLLM v0.22.1 (experimental)
   push              docker push \${IMAGE_REPO}:\${TAG}
   push-tuong        docker push \${IMAGE_REPO}:\${TUONG_TAG}
+  push-tuong-v2     docker push \${IMAGE_REPO}:\${TUONG_V2_TAG}
   tuong             build-tuong + push-tuong
+  tuong-v2          build-tuong-v2 + push-tuong-v2
   tag-digest        Print pinned digest for \${IMAGE_REPO}:\${TAG}
   test-opt          pytest develarper_opt/tests
   opt-smoke         docker compose smoke (SUBMIT_COMPOSE)
   submit-compose    Copy SUBMIT_COMPOSE -> SUBMIT_COPY_DEST
+  smoke-t5          Local smoke test for T5 compose
   ers-sim           Synthetic ERS ranking
   smoke-mock        CPU mock OpenAI server :8000
 
@@ -123,6 +128,10 @@ cmd_build_tuong() {
   DOCKERFILE=Dockerfile.tuong TAG="${TUONG_TAG}" cmd_build
 }
 
+cmd_build_tuong_v2() {
+  DOCKERFILE=Dockerfile.tuong.v2 TAG="${TUONG_V2_TAG}" cmd_build
+}
+
 cmd_build_baseline() {
   require_weights
   require_docker
@@ -148,9 +157,18 @@ cmd_push_tuong() {
   TAG="${TUONG_TAG}" cmd_push
 }
 
+cmd_push_tuong_v2() {
+  TAG="${TUONG_V2_TAG}" cmd_push
+}
+
 cmd_tuong() {
   cmd_build_tuong
   cmd_push_tuong
+}
+
+cmd_tuong_v2() {
+  cmd_build_tuong_v2
+  cmd_push_tuong_v2
 }
 
 cmd_tag_digest() {
@@ -164,6 +182,30 @@ cmd_test_opt() {
 
 cmd_opt_smoke() {
   bash scripts/opt_smoke.sh "${SUBMIT_COMPOSE}"
+}
+
+cmd_smoke_t5() {
+  require_docker
+  local COMPOSE="submit/docker-compose.t5.yml"
+  echo "[smoke-t5] Starting T5 container from ${COMPOSE}..."
+  docker compose -f "${COMPOSE}" up -d
+  echo "[smoke-t5] Waiting 90s for startup + warmup..."
+  sleep 90
+  echo "[smoke-t5] Checking health..."
+  if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+    echo "[smoke-t5] ✅ Health OK"
+    echo "[smoke-t5] Sending test request..."
+    curl -sf -X POST http://localhost:8000/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -d '{"model":"LFM2.5-1.2B-Instruct","messages":[{"role":"user","content":"Hi"}],"max_tokens":5}'
+    echo ""
+    echo "[smoke-t5] ✅ Smoke test PASSED"
+  else
+    echo "[smoke-t5] ❌ Health check FAILED — check logs:"
+    docker compose -f "${COMPOSE}" logs --tail=50
+  fi
+  echo "[smoke-t5] Stopping..."
+  docker compose -f "${COMPOSE}" down
 }
 
 cmd_submit_compose() {
@@ -193,14 +235,18 @@ main() {
     preflight)                cmd_preflight "$@" ;;
     build)                    cmd_build "$@" ;;
     build-tuong)              cmd_build_tuong "$@" ;;
+    build-tuong-v2)           cmd_build_tuong_v2 "$@" ;;
     build-baseline)           cmd_build_baseline "$@" ;;
     push)                     cmd_push "$@" ;;
     push-tuong)               cmd_push_tuong "$@" ;;
+    push-tuong-v2)            cmd_push_tuong_v2 "$@" ;;
     tuong)                    cmd_tuong "$@" ;;
+    tuong-v2)                 cmd_tuong_v2 "$@" ;;
     tag-digest)               cmd_tag_digest "$@" ;;
     test-opt)                 cmd_test_opt "$@" ;;
     opt-smoke)                cmd_opt_smoke "$@" ;;
     submit-compose)           cmd_submit_compose "$@" ;;
+    smoke-t5)                 cmd_smoke_t5 "$@" ;;
     submit-p0-compose)        cmd_submit_compose "$@" ;;
     ers-sim)                  cmd_ers_sim "$@" ;;
     smoke-mock)               cmd_smoke_mock "$@" ;;

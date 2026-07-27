@@ -1,5 +1,6 @@
-# Tuong T2 — CUDA Graphs pivot (config-only, platform OFF)
-# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+# REJECTED: scored 56.86 (TBT 4ms, TTFT p50/p95 62/93ms, fail=5)
+# Kept as archive. Do NOT upload to portal.
+# CUDA graphs added overhead without reducing TBT on LFM2.5 + MiG H200.
 
 services:
   model:

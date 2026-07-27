@@ -1,0 +1,67 @@
+# syntax=docker/dockerfile:1.6
+# ─────────────────────────────────────────────────────────────────────────────
+# Tuong T5 submission image — clean, optimized, no dead code.
+#
+# Stack:
+#   vllm/vllm-openai:v0.25.1
+#   + flashinfer-python (required for --mamba-backend=flashinfer)
+#   + uvloop + httptools (high-perf async, auto-detected by uvicorn)
+#   + LFM2.5 weights baked at /model
+#   + warmup script via sitecustomize.py (fail-open background process)
+#
+# What changed from v1:
+#   - REMOVED: develarper_opt/ (Triton patches proved unhelpful: T1=61.03 < 61.66)
+#   - ADDED: uvloop + httptools (2-4x faster event loop)
+#   - ADDED: warmup_server.py (pre-warm CUDA kernels + prefix cache)
+#   - ADDED: optimized env vars (CUDA_MODULE_LOADING=LAZY, MKL_NUM_THREADS=1, etc.)
+#   - CLEANED: no sitecustomize import overhead from platform registry
+#
+# Build:
+#   bash scripts/workflow.sh build-tuong-v2
+#   bash scripts/workflow.sh push-tuong-v2
+# ─────────────────────────────────────────────────────────────────────────────
+
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+FROM ${VLLM_IMAGE}
+
+# ── Optimized env vars for 3-vCPU MiG H200 ──────────────────────────────────
+ENV OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    CUDA_MODULE_LOADING=LAZY \
+    TOKENIZERS_PARALLELISM=false \
+    VLLM_ATTENTION_BACKEND=FLASHINFER \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# ── Install dependencies ─────────────────────────────────────────────────────
+# flashinfer: required for --mamba-backend=flashinfer on LFM2.5 hybrid layers
+# uvloop:     high-performance libuv-based asyncio event loop (auto-detected by uvicorn)
+# httptools:  fast C-based HTTP parser (auto-detected by uvicorn)
+RUN pip install --no-cache-dir \
+        "flashinfer-python>=0.6.4" \
+        "uvloop>=0.21.0" \
+        "httptools>=0.6.0" \
+    && python3 -c "import flashinfer; print('flashinfer ok:', flashinfer.__version__)" \
+    && python3 -c "import uvloop; print('uvloop ok:', uvloop.__version__)" \
+    && python3 -c "import httptools; print('httptools ok:', httptools.__version__)"
+
+# ── Bake competition weights ─────────────────────────────────────────────────
+COPY model_weights/LFM2.5-1.2B-Instruct /model
+RUN test -f /model/config.json && ls -lah /model | head
+
+# ── Warmup infrastructure (fail-open background process) ─────────────────────
+WORKDIR /workspace
+COPY scripts/warmup_server.py /workspace/warmup_server.py
+COPY scripts/sitecustomize_warmup.py /tmp/_sitecustomize_warmup.py
+
+RUN SITE_PKGS="$(python3 -c 'import site; print(site.getsitepackages()[0])')" \
+    && cp /tmp/_sitecustomize_warmup.py "${SITE_PKGS}/sitecustomize.py" \
+    && echo "warmup sitecustomize installed at ${SITE_PKGS}/sitecustomize.py"
+
+# ── Final verification ───────────────────────────────────────────────────────
+RUN python3 -c "import uvloop, httptools, flashinfer; print('All deps OK')"
+RUN python3 -c "import os; print('warmup_server exists:', os.path.exists('/workspace/warmup_server.py'))"
+
+EXPOSE 8000

@@ -18,7 +18,7 @@ GPQA baseline (ref): ~0.4 · Δ ≤ 0.10 → f(Δ)=1
 | **P0** (2026-07-21 13:31) | `longquanton/develarper-lfm25:p0` | **49.81** (fΔ=1 → ERS≈0.498) | Baseline BF16 · Accuracy Gate candidate |
 | **S1S2** (one-shot, same day) | same `p0` | *pending Portal* | Current Portal compose |
 
-Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md)
+Docs: [Document/COMPETITION.md](Document/COMPETITION.md) · [Document/TECHNICAL_STRATEGY.md](Document/TECHNICAL_STRATEGY.md) · [submit/BTC_SUBMISSION.md](submit/BTC_SUBMISSION.md)
 
 ---
 
@@ -80,7 +80,7 @@ Archives: [`submit/docker-compose.p0_baseline.yml`](submit/docker-compose.p0_bas
 | Portal compose (current) | [`docker-compose.yml`](docker-compose.yml) = **S1S2** |
 | Ablation library | [`submit/`](submit/) — p0 archive, S1S2, mem90, chunked-only, fp8, kv-fp8 |
 | Metrics log | [`eval/ablation_sheet.md`](eval/ablation_sheet.md) |
-| Tooling | `Makefile`, download / preflight / smoke / `ers_sim` / `set_image` |
+| Tooling | `scripts/workflow.sh`, download / preflight / smoke / `ers_sim` / `set_image` |
 
 ---
 
@@ -141,7 +141,7 @@ Priority: **failed→0** then **TPOT→1–3 ms**, keep ≥1 BF16 digest for GPQ
 | TPOT still ≥5 ms | Image `p1` + `--optimization-level 3`, then n-gram speculative |
 | Always | Do **not** overwrite Hub tag `p0`; use `p1`/`p2` for new images |
 
-Full ranked levers: [PLAN.md](PLAN.md).
+Full ranked levers: [Document/TECHNICAL_STRATEGY.md](Document/TECHNICAL_STRATEGY.md).
 
 ---
 
@@ -176,8 +176,8 @@ Full ranked levers: [PLAN.md](PLAN.md).
 ## 10. Reproduce / ship
 
 ```bash
-make download-model
-make build IMAGE_REPO=longquanton/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.23.0
+bash scripts/workflow.sh download-model
+IMAGE_REPO=longquanton/develarper-lfm25 TAG=p0 VLLM_IMAGE=vllm/vllm-openai:v0.23.0 bash scripts/workflow.sh build
 docker login && docker push longquanton/develarper-lfm25:p0
 
 # Portal: upload root docker-compose.yml (current = S1S2)
@@ -199,8 +199,8 @@ submit/
   docker-compose.a*.yml / b*.yml
 eval/ablation_sheet.md
 eval/traces/btc_workload_meta.json
-scripts/  configs/  Makefile
-CONTEXT.md  PLAN.md  SUBMIT.md  PROBLEM*.md
+scripts/  configs/  scripts/workflow.sh
+Document/COMPETITION.md  Document/TECHNICAL_STRATEGY.md  submit/
 model_weights/                  # gitignored
 ```
 

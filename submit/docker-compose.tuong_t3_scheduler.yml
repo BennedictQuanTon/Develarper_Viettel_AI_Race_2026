@@ -1,11 +1,6 @@
-# Portal upload — Tuong T4 (fp8_flash + prefill fairness, platform OFF)
-# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
-# Upload THIS file to BTC Portal.
-#
-# T1 (p01 Triton)    scored 61.03 (TTFT 50/71, TBT 4, fail 5)
-# T2 (CUDA graphs)   scored 56.86 (TTFT 62/93, TBT 4, fail 5) -> REJECTED
-# T3 (scheduler)     never submitted (slot became T4)
-# T4 targets TTFT via chunked-prefill fairness (max-num-partial-prefills).
+# ARCHIVE: never submitted because T2 slot was repurposed for T4.
+# Scheduler ablation idea: mbt=256, seqs=128, maxlen=5120.
+# Kept for reference. Do NOT upload to portal.
 
 services:
   model:
@@ -19,7 +14,6 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct
       - --host=0.0.0.0
       - --port=8000
-      # === Giữ nguyên fp8_flash stack (Yoshio 61.66) ===
       - --quantization=fp8
       - --dtype=bfloat16
       - --kv-cache-dtype=fp8
@@ -28,16 +22,11 @@ services:
       - --enable-chunked-prefill
       - --mamba-cache-mode=align
       - --mamba-backend=flashinfer
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=256
       - --block-size=32
       - --gpu-memory-utilization=0.96
-      - --max-model-len=8192
-      - --max-num-seqs=256
-      # === T4: prefill fairness — tấn công TTFT ===
-      - --max-num-partial-prefills=4
-      - --max-long-partial-prefills=2
-      - --long-prefill-token-threshold=1024
-      - --disable-log-stats
+      - --max-model-len=5120
+      - --max-num-seqs=128
     environment:
       - ENABLE_DEVELARPER_OPT=0
       - DEVELARPER_PAYLOADS=
