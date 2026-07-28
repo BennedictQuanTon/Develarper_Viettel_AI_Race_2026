@@ -51,8 +51,13 @@ s_tpot = clamp((10  - TPOT_ms) / 9,   0, 1)^2      ceiling=10ms,  floor=1ms
 | 23/07 08:17 | 49.91 | mamba_optlev | +optimization-level=3 → no gain (warmup eats health timeout) |
 | 24/07 07:20 | **55.66** | fp8_safe | **+quantization=fp8** → +5.7 pts |
 | 24/07 07:45 | **61.66** | fp8_flash | **+mamba-backend=flashinfer, mbt=512, block-size=32** → +6.0 pts |
+| 27/07 | *regressed* | fp8_flash_opt | +optimization-level=3 on fp8 base → no gain, confirmed dead |
+| 27/07 | *regressed* | fp8_batch_greed / bat_model_greed | mbt greed (256) → 54.3, DEAD |
+| 28/07 | *regressed* | **1.1 p7-mirror** (docker_compose_1.1.yaml) | mbt=768 + seqs=128 + `-O3` → **below fp8_flash; DISCARDED** — p7 params don't transfer across images |
 
 > QuanTon scored 61.18 (24/07 00:05) on separate branch. Their block-size=32 vs our 16 = ~0.5pt difference. Validated and adopted.
+
+> **2026-07-28 update:** Phase 1.1 (p7-mirror) regressed → the 62.01 (QuanTon) vs 61.66 (Yoshio) gap is **image/version-dependent** (vLLM 0.26.0 vs 0.25.1), not compose params. Live test: **1.3 dtype=float16** (current root `docker-compose.yml`). Next: 1.2 `seqs=70` on the fp8_flash base, then Phase 2 image rebuild on vLLM 0.26.0. See `Final CLI greed.md`.
 
 ---
 
@@ -117,21 +122,26 @@ command:
   - --max-num-batched-tokens=512    # aggressive decode interleaving
   - --block-size=32                 # SSM state alignment (empirically superior)
   - --gpu-memory-utilization=0.96
-  - --max-model-len=5120            # covers peak 4700 with 9% margin (untested)
+  - --max-model-len=8192            # as scored (see docker_compose_fp8_flash.yaml)
   - --max-num-seqs=256
 ```
+
+> Live test on top of this base (2026-07-28, root `docker-compose.yml`): `--dtype=float16` + `--gpu-memory-utilization=0.97` (Phase 1.3).
 
 ---
 
 ## Next Ablation Queue (1 variable per submission)
 
+> Updated 2026-07-28: B (`mbt=256`) and E (`-O3`) tested → DEAD. p7-mirror (1.1) → REGRESSED. Queue below supersedes the old one; full plan in `Final CLI greed.md`.
+
 | # | Ablation | Change | Expected ΔERS | Risk |
 |---|---|---|---|---|
-| **A** | maxlen=5120 scoring | current root compose | +1-2 pts | 420-token margin. Watch fail_count. |
-| **B** | `mbt=256` | 512 → 256 | +2-3 pts | TTFT may reach ~150-200ms, still safe |
-| **C** | A+B compound | mbt=256 + maxlen=5120 | +3-4 pts | After A and B individually scored |
-| **D** | `gpu-mem=0.97` | 0.96 → 0.97 | +0.5 pts | OOM risk under peak 70-conv load |
-| **E** | `--optimization-level=3` | Add flag to compose | +1-2 pts | **No rebuild needed** — compose-only flag. 30-60s startup warmup at runtime; only viable if BTC health timeout > 90s. Worth re-testing now image is cached on BTC infra. |
+| **1.3** | `dtype=float16` | bfloat16 → float16 (LIVE, current root compose) | +0.1-0.2 pts | Minimal; abort if GPQA Δ > 0.08 |
+| **1.2** | `max-num-seqs=70` | 256 → 70 on fp8_flash base | +0.3-0.5 pts (fail 5→0-2) | Rejections if peak load > 70 active seqs; abort if fail_count > 5 |
+| **2.1** | Rebuild on vLLM 0.26.0 | Dockerfile `ARG VLLM_IMAGE` (already defaulted) → tag `v0.26-p1` | +0 to +0.5 pts | Verify mamba flags still work on 0.26.0 |
+| **3.2** | Scheduler yield patch | Patch vLLM scheduler (Tuong's payload infra) | **+2.0 pts** (TBT 4→3.0-3.5ms) | High — starvation risk; smoke-test with ERS sim + GPQA before shortlist |
+| ~~A~~ | maxlen=5120 | — | superseded | Covered by Phase 1.x tests |
+| ~~D~~ | gpu-mem=0.97 | — | tested | In current compose; no further gain expected |
 
 ---
 

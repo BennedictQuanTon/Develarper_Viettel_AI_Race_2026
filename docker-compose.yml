@@ -11,7 +11,7 @@ services:
       - --host=0.0.0.0 
       - --port=8000
       - --quantization=fp8 
-      - --dtype=float16 # Float 16 instead of bfloat16
+      - --dtype=bfloat16
       - --kv-cache-dtype=fp8 
       - --tensor-parallel-size=1 
       - --enable-prefix-caching 

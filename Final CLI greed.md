@@ -1,6 +1,7 @@
 # Implementation Plan — Path to ERS 65+
 **Viettel AI Race 2026 · Challenge 3 · Yoshio Branch**
 *Date: 2026-07-27 · Based on: cross-branch diff + Issues #14 + #15*
+*Updated: 2026-07-28 — Phase 1.1 submitted, **regressed, discarded**. Live test: Phase 1.3 (dtype=float16).*
 
 ---
 
@@ -41,6 +42,7 @@ Levers:
 | `mbt=256` | Yoshio bat_model_greed → 54.3 | DEAD |
 | `mbt=512` vs `768` | QuanTon p7-mbt512 → 61.05 | 768 is superior |
 | `--max-num-seqs=256` | Both branches | 128 is superior (p7 proven) |
+| **p7-mirror on Yoshio stack** (mbt=768 + seqs=128 + `-O3`) | Yoshio Phase 1.1 → regressed | **DEAD — params do not transfer from QuanTon's image** |
 
 ---
 
@@ -49,7 +51,10 @@ Levers:
 **Goal:** Close the 0.35pt gap between Yoshio (61.66) and QuanTon (62.01).
 **No image rebuild. No new flags.**
 
-### 1.1 Adopt Validated p7 Parameters
+> [!WARNING]
+> **Phase 1.1 result (2026-07-28): REGRESSED — discarded.** The p7-mirror compose (`mbt=768` + `seqs=128` + `-O3`) scored below the fp8_flash baseline on the Yoshio stack. QuanTon's p7 params were validated only on their own image (vLLM 0.26.0) and **do not transfer** — the 62.01 vs 61.66 delta is image/version-dependent, not compose-parameter-dependent. Do not retry on this image. Note the test was confounded: it bundled `-O3` (already a dead end) with the param changes.
+
+### ~~1.1 Adopt Validated p7 Parameters~~ — TESTED, REGRESSED, DISCARDED (2026-07-28)
 
 The only two parameters separating Yoshio fp8_flash (61.66) from QuanTon p7-oneshot (62.01):
 
@@ -75,12 +80,13 @@ Archive of this submission for rollback.
 
 ---
 
-### 1.2 Ablate `--max-num-seqs=70` (if 1.1 scores ≥ 62.0)
+### 1.2 Ablate `--max-num-seqs=70` (base: fp8_flash, seqs=256 — 1.1 premise void)
 
-QuanTon used `seqs=128` but never tested `seqs=70` (exact conversation count). Fewer queued sequences = less scheduler contention at peak.
+Original premise ("if 1.1 ≥ 62.0") is void since 1.1 regressed, but the idea is **independent of the p7 params** and can be tested directly on the fp8_flash base. QuanTon used `seqs=128` but nobody tested `seqs=70` (exact conversation count). Fewer queued sequences = less scheduler contention at peak.
 
 ```diff
-- --max-num-seqs=128
+# on fp8_flash base (docker-compose.yml current flags, dtype=bfloat16 or float16 winner)
+- --max-num-seqs=256
 + --max-num-seqs=70
 ```
 
@@ -109,7 +115,7 @@ No branch has tested FP16 vs BF16. On H200 SM90, FP16 has marginally better hard
 
 **Goal:** Match QuanTon's base and unlock potential 0.26.0 scheduler improvements.
 
-QuanTon confirmed 62.01 on vLLM **0.26.0** (`p7-oneshot`). Yoshio runs **0.25.1**. If Phase 1 scores < 62.0, the version delta is the cause.
+QuanTon confirmed 62.01 on vLLM **0.26.0** (`p7-oneshot`). Yoshio runs **0.25.1**. Phase 1.1's regression (2026-07-28) strengthened this hypothesis: adopting p7's compose params on the Yoshio image did **not** close the gap, so the delta is in the image/base version, not the flags.
 
 ### 2.1 Rebuild Base Image
 
@@ -174,9 +180,9 @@ The scheduler's `_schedule_running()` loop processes decode steps sequentially. 
 ## Submission Sequence
 
 ```
-Phase 1.1 → mbt=768 + seqs=128           → expect ~62.0  (compose-only)
-Phase 1.2 → seqs=70                       → expect ~62.3  (compose-only)
-Phase 1.3 → dtype=float16                 → expect ~62.5  (compose-only)
+Phase 1.1 → mbt=768 + seqs=128 + -O3      → REGRESSED (2026-07-28) — discarded
+Phase 1.3 → dtype=float16                 → LIVE TEST (current root docker-compose.yml)
+Phase 1.2 → seqs=70 (on fp8_flash base)   → next, if 1.3 result known & slot available
 Phase 2.1 → rebuild vLLM 0.26.0 base     → expect ~62.5  (new image)
 Phase 3.2 → scheduler yield patch         → expect ~65+   (new image + patch)
 ```
@@ -213,7 +219,7 @@ Keep `fp8_flash` (Yoshio, BF16 weights, online FP8) as a GPQA-safe candidate. Ph
 
 ## Open Questions
 
-1. **QuanTon's `p7-oneshot` image (`longquanton/develarper-lfm25:p7-oneshot`)** — is this based on vLLM 0.26.0 confirmed? If yes, does rebuilding `asterios2707` on 0.26.0 replicate exact behavior?
+1. **QuanTon's `p7-oneshot` image (`longquanton/develarper-lfm25:p7-oneshot`)** — is this based on vLLM 0.26.0 confirmed? If yes, does rebuilding `asterios2707` on 0.26.0 replicate exact behavior? (Phase 1.1 regression says the gap is image-side — Phase 2.1 is the test.)
 
 2. **fail=5 root cause** — are failures OOM (capacity), timeout (TTFT > ceiling), or decode errors? This determines whether `seqs=70` fixes them or exposes a different issue.
 
