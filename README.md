@@ -15,14 +15,21 @@ GPQA baseline (ref): ~0.4 · Δ ≤ 0.10 → f(Δ)=1
 
 | Submission | Hub image | Score / ERS | Status |
 |---|---|---|---|
-| **P0** (2026-07-21) | `p0` (BF16, v0.23.0) | **49.81** | GPQA anchor · immutable |
-| S1S2 (maxlen 8192+bt 2048) | `p0` | 48.45 | Rejected — TBT không đổi |
-| X1 (ngram speculative) | `p0` | **FAIL** | Crashed — banned |
-| **E1+** (FP8+KV FP8) | `p0` | **59.57** | Best ERS (v0.23) · GPQA candidate |
-| **E2-Safe** (v0.25.1+Chunked 1024) | `p1-v25` | **59.57** | TBT vẫn 4ms · fail 5 |
-| **Z1 FlashMamba** | `p1-v25` | **Pending** | **Current submit** · flashinfer+align+bt512 |
+| **P0 Baseline** | `p0` (BF16, v0.23.0) | **49.81** | GPQA anchor · immutable ($\Delta=0$) |
+| S1S2 | `p0` | 48.45 | Rejected — maxlen 8192 + bt 2048 |
+| X1 Speculative | `p0` | **FAIL** | Rejected — n-gram crash |
+| **E1+ FP8** | `p0` | **59.57** | Keep ERS — FP8 Weight + KV (+9.76 pts) |
+| **E2-Safe** | `p1-v25` (v0.25.1) | **59.57** | Keep ERS — v0.25.1 + Chunked 1024 (fail 5) |
+| **Z1 FlashMamba** | `p2-fi` | **61.18** | Keep ERS — FlashInfer SSM + Align + bt=512 |
+| **#10 Yoshio** | `p2-fi` | **61.66** | Keep ERS — FlashInfer + Align + block32 |
+| **Backup Tuned** | `p2-fi` | **61.58** | Keep ERS — mbt=768 + seqs=128 |
+| **p7-oneshot** | `p7-oneshot` (v0.26.0) | **62.01** | 🏆 **MVP RECORD** — FlashInfer + mbt=768 + seqs=128 |
+| p7-mbt512 | `p7-oneshot` | 61.05 | Rejected — mbt 768→512 (TTFT p95 +9ms) |
+| p8-shortconv | `p8-shortconv` | 61.90 | Ablation — Fuse ShortConv Triton |
+| p9-decode | `p9-decode` | 61.54 | Ablation — ShortConv v2 + RMSNorm |
+| p5-sf8 | `p5-sf8` | 50.46 | Rejected — Offline static FP8 (TBT 4→6ms) |
 
-Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md)
+Docs: [PLAN.md](PLAN.md) · [CONTEXT.md](CONTEXT.md) · [SUBMIT.md](SUBMIT.md) · [PROBLEM_VN.md](PROBLEM_VN.md) · [eval/ablation_sheet.md](eval/ablation_sheet.md)
 
 ---
 
@@ -118,21 +125,23 @@ ERS (TTFT + TPOT) → leaderboard
 (post-online) ≤5 picks → GPQA → Score
 ```
 
-**Current serve command (Z1 FlashMamba):**
+**Gold serve command (p7-oneshot — ERS 62.01):**
 
 ```text
 python3 -m vllm.entrypoints.openai.api_server
   --model=/model
   --served-model-name=LFM2.5-1.2B-Instruct
   --host=0.0.0.0 --port=8000
-  --max-model-len=32768
-  --gpu-memory-utilization=0.95
+  --max-model-len=8192
+  --gpu-memory-utilization=0.96
   --tensor-parallel-size=1
   --enable-prefix-caching
   --quantization=fp8
   --kv-cache-dtype=fp8
   --enable-chunked-prefill
-  --max-num-batched-tokens=512
+  --max-num-batched-tokens=768
+  --max-num-seqs=128
+  --block-size=32
   --mamba-backend=flashinfer
   --mamba-cache-mode=align
 ```
@@ -234,12 +243,11 @@ Tuning `max-model-len`, chunked prefill, batched-tokens = allowed engine optimiz
 
 | Item | Status |
 |---|---|
-| Hub image `p0` (BF16, v0.23.0, amd64) | ✅ Ready · **immutable — GPQA anchor** |
-| Hub image `p1-v25` (BF16, v0.25.1, amd64) | ✅ Ready |
-| Best ERS online | **59.57** (E1+ & E2-Safe) |
-| Root `docker-compose.yml` | = **Z1 FlashMamba** (current submit) |
-| Z1 unlock | `--mamba-backend=flashinfer` + `--mamba-cache-mode=align` + bt=512 |
-| GPQA shortlist | P0 (BF16) + E1+/E2 (59.57) |
-| Target | ERS **~78-83** |
+| Hub image `p0` (BF16, v0.23.0, amd64) | ✅ Ready · **immutable — GPQA anchor** ($\Delta=0$) |
+| Hub image `p7-oneshot` (v0.26.0, amd64) | 🏆 **MVP RECORD — ERS 62.01** |
+| Best ERS online | **62.01** (`p7-oneshot`) |
+| Root `docker-compose.yml` | = **`p7-oneshot`** (`submit/docker-compose.p7_oneshot.yml`) |
+| Winning flags | FP8 W+KV + FlashInfer SSM + Align + `mbt=768` + `seqs=128` + `block=32` |
+| GPQA shortlist (≤5) | P0 (49.81) + E1+ (59.57) + E2 (59.57) + Z1 (61.18) + p7-oneshot (62.01) |
 
-*Last updated: 2026-07-23 · Z1 FlashMamba submit*
+*Last updated: 2026-07-28 · MVP p7-oneshot baseline*
