@@ -138,9 +138,9 @@ TOÁN:  TBT 3.5 → ~65+ ; TTFT p50/p95 không đủ một mình
 MÁY:   Mac buildx amd64 ; JIT thật trên H200 BTC
 ```
 
-## 8. Update sau Portal p8 + p9
+## 8. Update sau Portal p8 + p9 + p7-mbt512
 
 - **p8 = 61.90**, TBT vẫn **4ms** → micro-fuse ShortConv không đủ 65+. `eval/p8_shortconv_postmortem.md`
-- **p9 = 61.54**, TBT vẫn **4ms**, TTFT p50 49 → −0.47 vs p7. ShortConv v2 + RMSNorm + mem/cudagraph **eval âm**. `eval/p9_decode_postmortem.md`
-- **Vàng đội vẫn `p7-oneshot` = 62.01.** Không đốt slot thêm cùng họ Mac-only fuse nếu không có GPU profile.
-- Build scripts (lịch sử): `scripts/build_push_p8_shortconv.sh`, `scripts/build_push_p9_decode.sh`
+- **p9 = 61.54**, TBT vẫn **4ms**, TTFT p50 49 → −0.47 vs p7. `eval/p9_decode_postmortem.md`
+- **p7-mbt512 = 61.05** (2026-07-27): chỉ mbt 768→512 trên p7 → fail vẫn 5, TTFT p95 68→77 → **−0.96**. Báo cáo đầy đủ: `eval/report_cli_upgrade_p7_mbt512.md`
+- **Vàng đội vẫn `p7-oneshot` = 62.01 (`mbt=768`).** CLI serving coi như **đóng trần**.

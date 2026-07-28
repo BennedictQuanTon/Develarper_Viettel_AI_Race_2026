@@ -1,6 +1,3 @@
-# p7 + mbt=512 oneshot — image vàng p7-oneshot, chỉ đổi batched-tokens 768→512
-# Rollback reference: submit/docker-compose.p7_oneshot.yml (ERS 62.01)
-# Expect: ~61.8–62.5 · TBT vẫn ~4 · có thể fail↓ · không kỳ vọng 65+
 services:
   model:
     image: longquanton/develarper-lfm25:p7-oneshot
@@ -20,7 +17,7 @@ services:
       - --quantization=fp8
       - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=768
       - --max-num-seqs=128
       - --block-size=32
       - --mamba-backend=flashinfer

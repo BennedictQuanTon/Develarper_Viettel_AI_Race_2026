@@ -114,6 +114,7 @@ $$\text{Score}_{\text{final}} = 100 \times \text{ERS} \times f(\Delta)$$
 | **Z1 FlashMamba**| `lfm25:p2-fi` (v0.25.1) | **61.18** | **4 ms** | **48ms / 68ms** | **4** | ✅ Keep (ERS) | Native FlashInfer SSM + Mamba State Cache Align + bt=512 (**+1.61 điểm**, Fail 5 $\rightarrow$ 4). |
 | **Backup Tuned** | `lfm25:p2-fi` (v0.25.1) | **61.58** | **4 ms** | **48ms / 71ms** | **5** | ✅ Keep (ERS) | Image `:p2-fi` + FP8 + FlashInfer Align + `mbt=768` + `seqs=128`. Ngang kỷ lục (chênh 0.08 điểm). |
 | **p7-oneshot** | `lfm25:p7-oneshot` (v0.26.0) | **62.01** | **4 ms** | **48ms / 68ms** | **5** | 🏆 **MVP RECORD** | Image `:p7-oneshot` + v0.26.0 + FlashInfer Align + `mbt=768` + `seqs=128`. TTFT p95 hạ xuống 68ms (**+0.35 điểm** so với #10). |
+| **p7-mbt512** | `lfm25:p7-oneshot` | **61.05** | **4 ms** | **49ms / 77ms** | **5** | ❌ Reject | Chỉ mbt=512. Fail không↓; TTFT p95 77 → −0.96 vs p7. Xem `eval/report_cli_upgrade_p7_mbt512.md`. |
 | **p8-shortconv** | `lfm25:p8-shortconv` | **61.90** | **4 ms** | **46ms / 69ms** | **6** | ❌ Ablation | Fuse ShortConv. TBT không đổi; −0.11 vs p7. |
 | **p9-decode** | `lfm25:p9-decode` | **61.54** | **4 ms** | **49ms / 69ms** | **5** | ❌ Ablation | ShortConv v2 + RMSNorm + mem/cudagraph. TBT vẫn 4; −0.47 vs p7. |
 

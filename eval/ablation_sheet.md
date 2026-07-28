@@ -11,6 +11,7 @@
 | **#10 Yoshio** | **61.66** | **4** | **48ms / 70ms** | **5** | Y ERS | Top 1 cũ | FlashInfer + Align + bt=512 + Block32 + MaxLen 8192. |
 | **Backup Tuned** | **61.58** | **4** | **48ms / 71ms** | **5** | Y ERS | ✅ Keep (ERS) | Image `:p2-fi` + FP8 + FlashInfer Align + `mbt=768` + `seqs=128`. Chạy siêu ổn định. |
 | **p7-oneshot** | **62.01** | **4** | **48ms / 68ms** | **5** | Y ERS | 🏆 **MVP RECORD** | Image `:p7-oneshot` (v0.26.0) + FlashInfer Align + `mbt=768` + `seqs=128`. |
+| **p7-mbt512** | **61.05** | **4** | **49ms / 77ms** | **5** | N | Chỉ đổi mbt 768→512 trên p7. Fail không↓; TTFT p95 68→77 → **−0.96 vs p7**. Đóng residual CLI. |
 | **p8-shortconv** | **61.90** | **4** | **46ms / 69ms** | **6** | N ablation | Fuse ShortConv 3-op. **TBT không đổi**. TTFT p50 tốt nhẹ; fail+1 → −0.11 vs p7. |
 | **p9-decode** | **61.54** | **4** | **49ms / 69ms** | **5** | N ablation | ShortConv v2 + fused RMSNorm + mem 0.98 + cudagraph sizes. **TBT vẫn 4**; TTFT p50 xấu hơn → **−0.47 vs p7**. Mac-only kernel/system nhẹ **eval âm**. |
 | Z2 Pro (15:20) | 56.44 | 4 | 58ms / 137ms | 5 | N | `bt=256` + seqs=80 → TTFT p95 137ms. |
@@ -30,3 +31,8 @@
 2. Cửa **65+** cần TBT ≤ ~3.5 — Mac-only đoán kernel **không** đạt; dừng đốt slot cùng họ đòn.
 3. **Vàng đội vẫn `p7-oneshot` = 62.01.** p8/p9 chỉ giữ làm ablation âm.
 4. Chi tiết: `eval/p8_shortconv_postmortem.md`, `eval/p9_decode_postmortem.md`.
+
+### Bài học p7-mbt512 (61.05) — residual CLI
+1. Trên **đúng image p7**, hạ `mbt` 768→512 **không** giảm fail (vẫn 5); TTFT p95 **68→77** → mất ~1 điểm.
+2. Z1 fail=4 với bt=512 là trên **v0.25.1 / stack khác** — không chuyển nguyên sang p7 v0.26.
+3. **CLI serving coi như đóng trần**; vàng vẫn `mbt=768` (p7). Báo cáo: `eval/report_cli_upgrade_p7_mbt512.md`.
