@@ -11,7 +11,7 @@
 
 services:
   model:
-    image: nakituonghuynh/develarper-lfm25:tuong-opt-v2
+    image: nakituonghuynh/develarper-lfm25:v2
     entrypoint:
       - python3
       - -m

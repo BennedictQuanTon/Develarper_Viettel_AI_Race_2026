@@ -33,18 +33,6 @@ services:
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
       - --max-num-seqs=256
-      # === T4: prefill fairness — tấn công TTFT ===
-      - --max-num-partial-prefills=4
-      - --max-long-partial-prefills=2
-      - --long-prefill-token-threshold=1024
-      - --disable-log-stats
-    environment:
-      - ENABLE_DEVELARPER_OPT=0
-      - DEVELARPER_PAYLOADS=
-      - OMP_NUM_THREADS=1
-      - OPENBLAS_NUM_THREADS=1
-      - VLLM_ATTENTION_BACKEND=FLASHINFER
-      - PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
     ports:
       - "8000:8000"
     shm_size: "2g"
