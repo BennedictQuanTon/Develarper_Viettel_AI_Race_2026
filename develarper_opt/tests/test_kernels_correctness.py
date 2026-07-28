@@ -17,6 +17,11 @@ from develarper_opt.kernels.fused_rmsnorm import (
     is_available,
     triton_rmsnorm,
 )
+from develarper_opt.kernels.fused_add_rmsnorm import (
+    _add_rmsnorm_reference,
+    is_available as add_rmsnorm_available,
+    triton_add_rmsnorm,
+)
 from develarper_opt.kernels.fused_silu_mul import (
     _silu_mul_reference,
     triton_silu_mul,
@@ -121,3 +126,63 @@ class TestSiluMulCuda:
         y_ref = _silu_mul_reference(gate, up)
         max_diff = (y_fast - y_ref).float().abs().max().item()
         assert max_diff < 1e-2, f"Triton SiluMul diverged: {max_diff}"
+
+
+# ── Fused Add + RMSNorm ─────────────────────────────────────────────────────
+
+
+class TestAddRMSNormReference:
+    @pytest.mark.parametrize("hidden", [1024, 2048])
+    def test_no_residual_matches_rmsnorm(self, hidden):
+        x = torch.randn(8, hidden, dtype=torch.float32)
+        w = torch.randn(hidden, dtype=torch.float32)
+        y_add, _ = _add_rmsnorm_reference(x, w, 1e-6, residual=None)
+        y_rms = _rmsnorm_reference(x, w, 1e-6)
+        assert torch.allclose(y_add, y_rms, atol=1e-5)
+
+    def test_residual_semantics(self):
+        x = torch.randn(4, 512, dtype=torch.float32)
+        residual = torch.randn(4, 512, dtype=torch.float32)
+        w = torch.ones(512, dtype=torch.float32)
+        y, new_res = _add_rmsnorm_reference(x, w, 1e-6, residual)
+        assert torch.allclose(new_res, x + residual, atol=1e-5)
+        y_ref, res_ref = _add_rmsnorm_reference(x, w, 1e-6, residual)
+        assert torch.allclose(y, y_ref, atol=1e-5)
+        assert torch.allclose(new_res, res_ref, atol=1e-5)
+
+
+class TestAddRMSNormFallback:
+    @pytest.mark.parametrize("hidden", [1024, 2048])
+    @pytest.mark.parametrize("batch", [1, 16])
+    def test_cpu_matches_reference(self, hidden, batch):
+        x = torch.randn(batch, hidden, dtype=torch.float32)
+        w = torch.randn(hidden, dtype=torch.float32)
+        residual = torch.randn(batch, hidden, dtype=torch.float32)
+        y_fast, res_fast = triton_add_rmsnorm(x, w, 1e-6, residual)
+        y_ref, res_ref = _add_rmsnorm_reference(x, w, 1e-6, residual)
+        assert (y_fast - y_ref).abs().max().item() < 1e-5
+        assert torch.allclose(res_fast, res_ref, atol=1e-5)
+
+
+@pytest.mark.cuda
+class TestAddRMSNormCuda:
+    def test_triton_matches_reference_fp16_no_residual(self, require_cuda):
+        if not add_rmsnorm_available():
+            pytest.skip("Triton unavailable")
+        x = torch.randn(32, 2048, device="cuda", dtype=torch.float16)
+        w = torch.randn(2048, device="cuda", dtype=torch.float16)
+        y_fast, _ = triton_add_rmsnorm(x, w, 1e-6)
+        y_ref, _ = _add_rmsnorm_reference(x, w, 1e-6)
+        max_diff = (y_fast - y_ref).float().abs().max().item()
+        assert max_diff < 1e-2
+
+    def test_triton_matches_reference_fp16_with_residual(self, require_cuda):
+        if not add_rmsnorm_available():
+            pytest.skip("Triton unavailable")
+        x = torch.randn(32, 2048, device="cuda", dtype=torch.float16)
+        residual = torch.randn(32, 2048, device="cuda", dtype=torch.float16)
+        w = torch.randn(2048, device="cuda", dtype=torch.float16)
+        y_fast, res_fast = triton_add_rmsnorm(x, w, 1e-6, residual)
+        y_ref, res_ref = _add_rmsnorm_reference(x, w, 1e-6, residual)
+        assert (y_fast - y_ref).float().abs().max().item() < 1e-2
+        assert torch.allclose(res_fast, res_ref, atol=1e-2)

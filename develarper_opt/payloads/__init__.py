@@ -9,3 +9,4 @@ order.
 from . import p01_fused_rmsnorm  # noqa: F401
 from . import p02_fused_silu_mul  # noqa: F401
 from . import p03_cudagraph_hint  # noqa: F401
+from . import p04_lfm2_fused_layers  # noqa: F401

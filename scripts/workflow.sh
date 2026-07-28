@@ -28,13 +28,13 @@ cd "${ROOT}"
 # ═══════════════════════════════════════════════════════════════════════════
 IMAGE_REPO="${IMAGE_REPO:-nakituonghuynh/develarper-lfm25}"
 TAG="${TAG:-p0}"
-TUONG_TAG="${TUONG_TAG:-tuong-opt-v2}"
+TUONG_TAG="${TUONG_TAG:-tuong-p7-fused}"
 # Dockerfile dùng cho build-tuong: Dockerfile.${ACTIVE_VERSION} (vd. v2 → Dockerfile.v2)
-ACTIVE_VERSION="${ACTIVE_VERSION:-v2}"
+ACTIVE_VERSION="${ACTIVE_VERSION:-tuong_p7_fused}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 VLLM_IMAGE="${VLLM_IMAGE:-vllm/vllm-openai:v0.25.1}"
 DOCKERFILE="${DOCKERFILE:-Dockerfile}"
-SUBMIT_COMPOSE="${SUBMIT_COMPOSE:-submit/docker-compose.v2.yml}"
+SUBMIT_COMPOSE="${SUBMIT_COMPOSE:-submit/docker-compose.yml}"
 SUBMIT_COPY_DEST="${SUBMIT_COPY_DEST:-/tmp/docker-compose.yml}"
 
 WEIGHTS_DIR="${ROOT}/model_weights/LFM2.5-1.2B-Instruct"
@@ -102,6 +102,11 @@ resolve_dockerfile() {
 
   if [[ "${version}" == "tuong" && -f "Dockerfile.tuong" ]]; then
     echo "Dockerfile.tuong"
+    return 0
+  fi
+
+  if [[ "${version}" == "tuong_p7_fused" && -f "Dockerfile.tuong_p7_fused" ]]; then
+    echo "Dockerfile.tuong_p7_fused"
     return 0
   fi
 

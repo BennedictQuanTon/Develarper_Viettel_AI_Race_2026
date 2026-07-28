@@ -152,9 +152,11 @@ Lỗi / timeout / 0 token → **S = 0**. OOM khi tăng concurrency vẫn là r�
 | ID | Điểm | TBT | Fail | Ghi chú |
 |---|---|---|---|---|
 | T1 p01 Triton | **61.03** | 4ms | 5 | fp8_flash + opt-platform p01 — không thắng Yoshio |
-| T2 CUDA graphs | **56.86** | 4ms | 5 | Platform OFF + CUDA graphs — **REJECTED**, TBT không giảm, TTFT tăng |
+| T2 CUDA graphs | **56.86** | 4ms | 5 | Platform OFF + CUDA graphs — **REJECTED** |
 | T3 scheduler | — | — | — | mbt=256, seqs=128, maxlen=5120 — not submitted |
-| T4 prefill fairness | — | — | — | `max-num-partial-prefills=4` — targets TTFT |
+| T4 prefill fairness | **CRASH** | — | — | concurrent partial prefill — dead on v0.25.1 |
+| P7 oneshot (Quan) | **62.01** | — | — | mbt=768, seqs=128 — **team config gold** |
+| T5 P7 + p04 fused | — | — | — | fused add+RMSNorm + SiLU*Mul — **current submit** |
 
 ### 5.4 Validated insights (cả team)
 
@@ -163,8 +165,10 @@ Lỗi / timeout / 0 token → **S = 0**. OOM khi tăng concurrency vẫn là r�
 - `max-model-len=8192` đủ (peak 4700); 5120 có thể tiết kiệm VRAM thêm
 - `gpu-memory-utilization=0.96` ngưỡng an toàn
 - Speculative, `-O3`, `mamba-backend=CUDA` = dead ends
-- Triton p01 RMSNorm (T1) = dead end, không cải thiện score (61.03 vs 61.66)
+- Triton p01 RMSNorm (T1) = dead end, không cải thiện score (61.03 vs 61.66); T5 dùng **fused add+RMSNorm** (p04)
 - CUDA graphs (T2) = dead end, score giảm 56.86 (TBT 4ms, TTFT tăng 12ms)
+- Concurrent partial prefill (T4) = crash NotImplementedError trên v0.25.1
+- P7 oneshot (Quan) = **62.01** — serving baseline cho T5
 
 ---
 
@@ -348,4 +352,4 @@ POST-SUBMIT:
 
 Đề biến cuộc chơi thành **serving edge-LLM trên VRAM hẹp, latency gắt, shared prefix**. Thắng = **image đúng luật + prefix cache + TPOT ổn định + không lỗi**, rồi mới system opt (graphs/scheduler).
 
-**Trạng thái hiện tại (2026-07-26):** SOTA team ~61.66 (Yoshio fp8_flash). Tuong T1 (p01) = 61.03; T2 CUDA graphs = 56.86 (REJECTED). **Final:** T4 prefill fairness targets TTFT.
+**Trạng thái hiện tại (2026-07-28):** Team config gold **P7 oneshot 62.01** (Quan). Tuong **T5** = P7 flags + image `tuong-p7-fused` với payload `p04_lfm2_fused_layers` (fused add+RMSNorm + SiLU*Mul). T4 concurrent partial prefill = dead end.

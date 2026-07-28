@@ -1,15 +1,17 @@
-# Portal upload — Tuong T4 (fp8_flash + prefill fairness, platform OFF)
-# Image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+# Portal upload — Tuong T5 (P7 gold + fused LFM2 kernels)
+# Image: nakituonghuynh/develarper-lfm25:tuong-p7-fused
 # Upload THIS file to BTC Portal.
 #
-# T1 (p01 Triton)    scored 61.03 (TTFT 50/71, TBT 4, fail 5)
-# T2 (CUDA graphs)   scored 56.86 (TTFT 62/93, TBT 4, fail 5) -> REJECTED
-# T3 (scheduler)     never submitted (slot became T4)
-# T4 targets TTFT via chunked-prefill fairness (max-num-partial-prefills).
+# HISTORY:
+# T1 (p01 Triton)        scored 61.03  -> REJECTED (no residual fusion)
+# T2 (CUDA graphs)       scored 56.86  -> REJECTED
+# T4 (partial prefill)   CRASHED       -> dead end on v0.25.1
+# P7 oneshot (Quan)      scored 62.01  -> serving baseline
+# T5 (P7 + p04 fused)    targets >62.01
 
 services:
   model:
-    image: nakituonghuynh/develarper-lfm25:tuong-opt-v1
+    image: nakituonghuynh/develarper-lfm25:tuong-p7-fused
     entrypoint:
       - python3
       - -m
@@ -19,20 +21,27 @@ services:
       - --served-model-name=LFM2.5-1.2B-Instruct
       - --host=0.0.0.0
       - --port=8000
-      # === Giữ nguyên fp8_flash stack (Yoshio 61.66) ===
-      - --quantization=fp8
-      - --dtype=bfloat16
-      - --kv-cache-dtype=fp8
+      # === P7 gold serving stack (ERS 62.01) ===
+      - --max-model-len=8192
+      - --gpu-memory-utilization=0.96
       - --tensor-parallel-size=1
       - --enable-prefix-caching
+      - --quantization=fp8
+      - --kv-cache-dtype=fp8
       - --enable-chunked-prefill
-      - --mamba-cache-mode=align
-      - --mamba-backend=flashinfer
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=768
+      - --max-num-seqs=128
       - --block-size=32
-      - --gpu-memory-utilization=0.96
-      - --max-model-len=8192
-      - --max-num-seqs=256
+      - --mamba-backend=flashinfer
+      - --mamba-cache-mode=align
+      - --disable-log-stats
+    environment:
+      - ENABLE_DEVELARPER_OPT=1
+      - DEVELARPER_PAYLOADS=p04_lfm2_fused_layers
+      - DEVELARPER_STRICT=0
+      - DEVELARPER_LOG_LEVEL=INFO
+      - OMP_NUM_THREADS=1
+      - OPENBLAS_NUM_THREADS=1
     ports:
       - "8000:8000"
     shm_size: "2g"

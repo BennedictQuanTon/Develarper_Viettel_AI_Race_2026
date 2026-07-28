@@ -10,8 +10,8 @@ Tier 3 · E2E serve (Docker)     → bash scripts/opt_smoke.sh submit/docker-com
 
 ```bash
 cd Develarper_Viettel_AI_Race_2026
-docker build --platform linux/amd64 -f Dockerfile.tuong \
-  -t nakituonghuynh/develarper-lfm25:tuong-opt-v1 .
+docker build --platform linux/amd64 -f Dockerfile.tuong_p7_fused \
+  -t nakituonghuynh/develarper-lfm25:tuong-p7-fused .
 
 bash scripts/opt_smoke.sh submit/docker-compose.yml
 ```
