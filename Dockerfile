@@ -11,7 +11,7 @@
 #
 # Runtime must be offline (weights already in /model).
 
-ARG VLLM_IMAGE=vllm/vllm-openai:v0.25.1
+ARG VLLM_IMAGE=vllm/vllm-openai:v0.26.0
 FROM ${VLLM_IMAGE}
 ENV OMP_NUM_THREADS=1 \
     OPENBLAS_NUM_THREADS=1 \
