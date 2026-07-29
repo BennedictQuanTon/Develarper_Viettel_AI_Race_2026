@@ -6,9 +6,9 @@ services:
       - -m  
       - vllm.entrypoints.openai.api_server 
     command:
-      - --model=/model
-      - --served-model-name=LFM2.5-1.2B-Instruct
-      - --host=0.0.0.0
+      - --model=/model 
+      - --served-model-name=LFM2.5-1.2B-Instruct 
+      - --host=0.0.0.0 
       - --port=8000
       - --dtype=bfloat16
       - --kv-cache-dtype=fp8
@@ -17,11 +17,11 @@ services:
       - --enable-chunked-prefill
       - --mamba-cache-mode=align
       - --mamba-backend=flashinfer
-      - --max-num-batched-tokens=2048
+      - --max-num-batched-tokens=512
       - --block-size=32
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
-      - --max-num-seqs=128
+      - --max-num-seqs=256
     ports:
       - "8000:8000"
     shm_size: "2g"
