@@ -1,14 +1,16 @@
+# Scored 46.73, do not submit
+
 services:
   model:
     image: asterios2707/develarper-agent:latest
     entrypoint:
-      - python3 
-      - -m  
-      - vllm.entrypoints.openai.api_server 
+      - python3
+      - -m
+      - vllm.entrypoints.openai.api_server
     command:
-      - --model=/model 
-      - --served-model-name=LFM2.5-1.2B-Instruct 
-      - --host=0.0.0.0 
+      - --model=/model
+      - --served-model-name=LFM2.5-1.2B-Instruct
+      - --host=0.0.0.0
       - --port=8000
       - --dtype=bfloat16
       - --kv-cache-dtype=fp8
@@ -17,7 +19,7 @@ services:
       - --enable-chunked-prefill
       - --mamba-cache-mode=align
       - --mamba-backend=flashinfer
-      - --max-num-batched-tokens=512
+      - --max-num-batched-tokens=512 # Potential bottleneck
       - --block-size=32
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
