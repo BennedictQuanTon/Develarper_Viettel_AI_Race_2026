@@ -1,3 +1,8 @@
+# bf16_safe_v2 — accuracy-gate candidate
+# Key insight: flashinfer hurts BF16 no-quant track (-3.15 pts vs Triton default)
+# bf16_safe (Triton, mbt=2048, seqs=256, block-size=16) = 50.64
+# This probes seqs=128 on same Triton base — target >50.64
+
 services:
   model:
     image: asterios2707/develarper-agent:latest
@@ -16,11 +21,12 @@ services:
       - --enable-prefix-caching
       - --enable-chunked-prefill
       - --mamba-cache-mode=align
+      # NO --mamba-backend=flashinfer (Triton default — superior for BF16)
       - --max-num-batched-tokens=2048
-      - --block-size=32
+      - --block-size=16
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
-      - --max-num-seqs=256
+      - --max-num-seqs=128    # probe: original was 256 (50.64)
     ports:
       - "8000:8000"
     shm_size: "2g"
