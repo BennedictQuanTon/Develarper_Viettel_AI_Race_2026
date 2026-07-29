@@ -1,6 +1,6 @@
-# Canary Configuration: p7-ers1024 + PYTORCH_CUDA_ALLOC_CONF VMM Allocator
-# Base Image: longquanton/develarper-lfm25:p7-oneshot (Proven Gold Image ERS 62.01)
-# Rollback: submit/docker-compose.p7_oneshot.yml (mbt=768)
+# Archive Canary: p7-ers1024_vmm
+# Base Image: longquanton/develarper-lfm25:p7-oneshot
+# Features: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True + mbt=1024 + mem=0.98
 
 services:
   model:
