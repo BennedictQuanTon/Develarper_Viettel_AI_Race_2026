@@ -2,7 +2,7 @@
 **Viettel AI Race 2026 · Challenge 3 · Team Develarper**
 **Model:** `LiquidAI/LFM2.5-1.2B-Instruct` · **Slice:** MiG H200 18GB · **Engine:** vLLM only
 **Image:** `asterios2707/develarper-agent:latest` (vLLM v0.25.1)
-**Last updated:** 2026-07-29 07:59
+**Last updated:** 2026-07-29 19:11
 
 ---
 
@@ -72,11 +72,14 @@ s_tpot = clamp((10  - TPOT_ms) / 9,   0, 1)^2      ceiling=10ms,  floor=1ms
 | ~later | 54.30 | [fp8_bat_model_greed](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_fp8_bat_model_greed.yaml) | mbt=256, maxlen=5120, mem=0.97 | −7.36: mbt=256 + maxlen compound — severe regression |
 | ~later | **Failed** | [fp8_float16](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_fp8_float16.yaml) | --dtype=float16 | Pod failed to start: LFM2.5 incompatible with float16+fp8 |
 | 29/07 | 46.73 | [bf16_flash](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_flash.yaml) | **no quant**, kv-fp8, mbt=512, seqs=256 | 🎯 accuracy-gate track; mbt=512 too aggressive for BF16 GPU |
-| 29/07 | **49.38** | [bf16_flashv2](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_flashv2.yaml) | no quant, kv-fp8, **mbt=1024, seqs=128** | 🎯 accuracy-gate track; +2.65 vs v1 — still 1.26 below 50.64 benchmark |
+| 29/07 | **49.38** | [bf16_flashv2](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_flashv2.yaml) | no quant, kv-fp8, mbt=1024, seqs=128 | 🎯 accuracy-gate; +2.65 vs v1 |
+| 29/07 | 47.49 | [bf16_flashv3](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_flashv3.yaml) | no quant, kv-fp8, **mbt=2048, seqs=256**, chunked-prefill ON | 🎯 accuracy-gate; REGRESSION vs v2 — mbt↑ hurt, not helped |
+| 29/07 | 47.93 | [bf16_noprefill](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_noprefill.yaml) | no quant, kv-fp8, mbt=2048, seqs=256, **no chunked-prefill** | 🎯 accuracy-gate; marginal +0.44 vs v3 but still well below 50.64 |
+| 29/07 | **49.67** | [bf16_flashv4](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_bf16_flashv4.yaml) | no quant, kv-fp8, mbt=1024, **seqs=256**, chunked-prefill ON | 🎯 accuracy-gate **NEW BEST**; +0.29 vs v2 — 0.97 below 50.64 |
 | *(unscored)* | — | [fp8_batch_greed](file:///d:/Dev/Projects/Viettel%20AI%20Race/Develarper_Viettel_AI_Race_2026/submit_yoshio/docker_compose_fp8_batch_greed.yaml) | mbt=256, mem=0.97 | archived only |
 
 > **Performance track best: 61.66** (fp8_flash, 24/07 07:45)
-> **Accuracy-gate track best: 49.38** (bf16_flashv2, 29/07) — target: beat 50.64
+> **Accuracy-gate track best: 49.67** (bf16_flashv4, 29/07) — 0.97 below 50.64 benchmark
 > **Team best: 62.01** (QuanTon p7-oneshot, vLLM 0.26.0)
 
 ---
@@ -108,7 +111,10 @@ s_tpot = clamp((10  - TPOT_ms) / 9,   0, 1)^2      ceiling=10ms,  floor=1ms
 | `--gpu-memory-utilization=0.97` | **regression** | Appears in all regressions; 0.96 is the ceiling |
 | `--quantization=fp8` removed (performance track) | **46.73** | **Intentional for accuracy-gate track only.** 14+ pts gap is acceptable trade for f(Δ)=1 guarantee. |
 | `mbt=512` on BF16 (no-quant) | **46.73** | Too aggressive — BF16 GPU can't process chunks fast enough. BF16 needs higher mbt. |
-| `mbt=1024 + seqs=128` on BF16 | **49.38** | +2.65 vs mbt=512. Still below 50.64. Seqs=128 may be too low for BF16 utilization. |
+| `mbt=1024 + seqs=128` on BF16 | **49.38** | Good result. mbt=1024 confirmed sweet spot. |
+| `mbt=2048 + seqs=256 + chunked-prefill` on BF16 | **47.49** | WORSE than 1024 — mbt peak is 1024 not 2048. |
+| `mbt=2048 + seqs=256, no chunked-prefill` on BF16 | **47.93** | Marginal +0.44 vs v3. No-prefill alone not sufficient. |
+| `mbt=1024 + seqs=256` on BF16 | **49.67** | **New no-quant best.** seqs=256 > seqs=128 at mbt=1024. |
 | `mbt=256 + maxlen=5120 compound` | **54.30** | Double-greedy destroyed both axes |
 | OMP env pinning | *(QuanTon Z3-ENV: 58.34)* | Dead |
 | CUDA graphs / compilation-config | *(QuanTon p9: regressed)* | Dead |
@@ -175,15 +181,19 @@ The current `docker-compose.yml` has regressed from the best: `--quantization=fp
 
 ### Accuracy-Gate Track (bf16, no weight quant)
 
-> Optimization direction is **INVERTED** vs fp8 track. BF16 GPU is slower → GPU is the bottleneck, not the scheduler. Need more tokens per batch for utilization.
+> **Finding update (29/07 19:11):** mbt=1024 is confirmed peak. seqs=256 > seqs=128 at this mbt (+0.29). Parameter space is now well-mapped.
+> BF16 no-quant optimization law: **mbt=1024, seqs=256, chunked-prefill ON** = current ceiling at 49.67.
 
 | # | Ablation | Change | Expected | Risk | Status |
 |---|---|---|---|---|---|
-| A | `mbt=2048 + seqs=256` | Maximize GPU utilization (match early-fixes era) | ~51-53 | Low | **Next submit** |
-| B | `mbt=1536 + seqs=256` | Intermediate between v2 and A | ~50-52 | Low | After A |
-| C | No chunked-prefill | Fewer scheduler rounds, full GPU prefill bursts | Unknown | Low | If A fails |
+| A | `mbt=2048 + seqs=256` | Higher GPU utilization | ~51-53 | Low | ✅ **47.49** — DEAD |
+| B | No chunked-prefill | Fewer scheduler rounds | Unknown | Low | ✅ **47.93** — DEAD |
+| C | `mbt=1024 + seqs=256` | Confirmed best combo | **49.67** | Low | ✅ **CURRENT BEST** |
+| D | `mbt=768 + seqs=256` | Lower mbt probe | ~49-50? | Low | **Next to try** |
+| E | Accept 49.67 as CLI ceiling | No further ablation | — | None | Likely fallback |
 
-> **Benchmark to beat: 50.64.** Progress: 46.73 → 49.38 → target 51+
+> **Benchmark to beat: 50.64.** Gap remaining: **0.97 pts.**
+> If D also regresses, 49.67 is likely the CLI ceiling for BF16 on vLLM 0.25.1. The 50.64 benchmark may reflect pre-optimization BTC server state rather than a reproducible config advantage.
 
 ---
 

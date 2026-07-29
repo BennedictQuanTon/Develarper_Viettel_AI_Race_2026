@@ -1,3 +1,5 @@
+# Scored 47.49, do not submit
+
 services:
   model:
     image: asterios2707/develarper-agent:latest
@@ -17,7 +19,7 @@ services:
       - --enable-chunked-prefill
       - --mamba-cache-mode=align
       - --mamba-backend=flashinfer
-      - --max-num-batched-tokens=768
+      - --max-num-batched-tokens=2048
       - --block-size=32
       - --gpu-memory-utilization=0.96
       - --max-model-len=8192
