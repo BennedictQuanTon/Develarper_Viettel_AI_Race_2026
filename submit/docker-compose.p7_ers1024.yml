@@ -1,8 +1,7 @@
-# p7-ers1024 — all-in ERS CLI canary (submit now)
-# Image: longquanton/develarper-lfm25:p7-oneshot (no rebuild)
-# vs p7 gold (62.01): mbt=768→1024, mem=0.96→0.98; maxlen stays 8192
+# Archive — p7-ers1024 all-in ERS CLI canary
+# Image: longquanton/develarper-lfm25:p7-oneshot
+# vs p7 gold: mbt=1024, mem=0.98; maxlen=8192
 # Rollback: submit/docker-compose.p7_oneshot.yml
-# Archive: submit/docker-compose.p7_ers1024.yml
 services:
   model:
     image: longquanton/develarper-lfm25:p7-oneshot
